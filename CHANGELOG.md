@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.7] - 2026-05-06 18:53
+
+### Changed
+- Hide technical scan details and enrich food cards with image and nutrition data
+
+
 ## [0.2.6] - 2026-05-06 18:45
 
 ### Changed
