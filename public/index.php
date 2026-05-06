@@ -11,11 +11,20 @@ if (!is_dir($baseDir . '/src') && is_dir(__DIR__ . '/src')) {
 
 require_once $baseDir . '/src/bootstrap.php';
 require_once $baseDir . '/config/database.php';
+require_once $baseDir . '/src/api/Router.php';
+require_once $baseDir . '/src/handlers/ScanHandler.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
 try {
     $pdo = db();
+
+    // Primary ingestion endpoint for ESP32 scanner.
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && (($_GET['endpoint'] ?? '') === 'scan')) {
+        handleScan($pdo);
+        exit;
+    }
+
     $result = $pdo->query('SELECT NOW() AS server_time')->fetch();
     
     // Get list of tables

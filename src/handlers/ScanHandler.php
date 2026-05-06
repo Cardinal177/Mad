@@ -17,9 +17,29 @@ function handleScan(PDO $pdo): void
     $movementType = $data['movement_type'] ?? 'in';        // 'in' or 'out'
     $quantity = (float) ($data['quantity'] ?? 1);
 
+    if (!in_array($movementType, ['in', 'out', 'adjust'], true)) {
+        response(400, ['error' => 'Invalid movement_type']);
+        return;
+    }
+
     try {
         // Start transaction
         $pdo->beginTransaction();
+
+        // Ensure default household/location exists to prevent foreign-key errors.
+        $stmt = $pdo->prepare('SELECT id FROM households WHERE id = ? LIMIT 1');
+        $stmt->execute([$householdId]);
+        if (!$stmt->fetch()) {
+            $stmt = $pdo->prepare('INSERT INTO households (id, name) VALUES (?, ?)');
+            $stmt->execute([$householdId, 'Default Household']);
+        }
+
+        $stmt = $pdo->prepare('SELECT id FROM household_locations WHERE id = ? AND household_id = ? LIMIT 1');
+        $stmt->execute([$locationId, $householdId]);
+        if (!$stmt->fetch()) {
+            $stmt = $pdo->prepare('INSERT INTO household_locations (id, household_id, name) VALUES (?, ?, ?)');
+            $stmt->execute([$locationId, $householdId, 'Default Location']);
+        }
 
         // Find or create product by barcode
         $stmt = $pdo->prepare(

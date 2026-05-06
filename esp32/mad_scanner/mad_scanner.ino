@@ -15,11 +15,12 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define TXD 17  // ESP32 TX pin
 
 // WiFi credentials
-const char* ssid = "IOT";
-const char* password = "LilleFingerMivKat";
+const char* ssid = "UniFi";
+const char* password = "Tommeltot2020";
 
 // API settings
-const char* apiHost = "http://mad.cardinal.webd.pro";
+const char* apiHost = "http://194.181.228.25";
+const char* apiHostHeader = "mad.cardinal.webd.pro";
 const char* apiKey = "YOUR_API_KEY";  // Optional, add if needed
 
 // State management
@@ -224,13 +225,14 @@ void sendToAPI(String barcode) {
     if (!isConnected) return;
     
     HTTPClient http;
-    String url = String(apiHost) + "/api/scan";
+    String url = String(apiHost) + "/index.php?endpoint=scan";
     
     http.begin(url);
+    http.addHeader("Host", apiHostHeader);
     http.addHeader("Content-Type", "application/json");
     
     // Build JSON payload
-    String payload = "{\"barcode\":\"" + barcode + "\",\"scanned_at\":\"" + String(millis()) + "\"}";
+    String payload = "{\"barcode\":\"" + barcode + "\",\"household_id\":1,\"location_id\":1,\"movement_type\":\"in\",\"quantity\":1}";
     
     Serial.println("Sending to API: " + payload);
     
