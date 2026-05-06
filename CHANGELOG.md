@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.0] - 2026-05-06 17:44
+
+### Changed
+- Add backend 2FA foundation: OTP request/verify endpoints, auth sessions, and InMobile SMS provider integration hooks
+
+
 ## [0.1.9] - 2026-05-06 17:37
 
 ### Changed
