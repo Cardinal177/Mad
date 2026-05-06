@@ -24,7 +24,7 @@ const char* apiHostIp = "194.181.228.25";
 const int apiPort = 80;
 const char* apiHostHeader = "mad.cardinal.webd.pro";
 const char* apiPath = "/api.php?endpoint=scan";
-const char* apiKey = "YOUR_API_KEY";  // Optional, add if needed
+const char* deviceToken = "mad-esp32-2026";
 
 // State management
 String lastScannedBarcode = "";
@@ -34,6 +34,10 @@ uint32_t lastDisplayRefresh = 0;
 uint32_t lastWifiRetryAt = 0;
 bool lastButtonState = HIGH;
 uint32_t lastButtonDebounceAt = 0;
+String lastSubmittedBarcode = "";
+String lastSubmittedMode = "";
+uint32_t lastSubmittedAt = 0;
+const uint32_t duplicateWindowMs = 2500;
 
 enum ScanMode {
     MODE_IN,
@@ -254,8 +258,14 @@ void connectWiFi() {
 void sendToAPI(String barcode) {
     if (!isConnected) return;
 
+    String movementType = String(modeToMovementType(currentMode));
+    if (barcode == lastSubmittedBarcode && movementType == lastSubmittedMode && (millis() - lastSubmittedAt) < duplicateWindowMs) {
+        Serial.println("Duplicate scan suppressed (client-side)");
+        return;
+    }
+
     // Build JSON payload
-    String payload = "{\"barcode\":\"" + barcode + "\",\"household_id\":1,\"location_id\":1,\"movement_type\":\"" + String(modeToMovementType(currentMode)) + "\",\"quantity\":1}";
+    String payload = "{\"barcode\":\"" + barcode + "\",\"household_id\":1,\"location_id\":1,\"movement_type\":\"" + movementType + "\",\"quantity\":1}";
 
     Serial.println("Sending to API: " + payload);
 
@@ -270,6 +280,7 @@ void sendToAPI(String barcode) {
     client.print("User-Agent: MadScannerESP32/1.0\r\n");
     client.print("Connection: close\r\n");
     client.print("Content-Type: application/json\r\n");
+    client.print(String("X-Device-Token: ") + deviceToken + "\r\n");
     client.print(String("Content-Length: ") + payload.length() + "\r\n\r\n");
     client.print(payload);
 
@@ -299,6 +310,9 @@ void sendToAPI(String barcode) {
 
     if (httpCode == 200 || httpCode == 201) {
         Serial.println("API Response: Success");
+        lastSubmittedBarcode = barcode;
+        lastSubmittedMode = movementType;
+        lastSubmittedAt = millis();
     } else {
         Serial.println("API Response: " + String(httpCode));
     }

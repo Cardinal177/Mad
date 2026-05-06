@@ -73,10 +73,14 @@ Update API endpoint if needed:
 ```cpp
 const char* apiHostIp = "194.181.228.25";
 const char* apiHostHeader = "mad.cardinal.webd.pro";
+const char* apiPath = "/api.php?endpoint=scan";
+const char* deviceToken = "mad-esp32-2026";
 ```
 
 Firmware sender HTTP til serverens IP men med korrekt `Host` header.
 Det er vigtigt, fordi virtual host ellers kan svare 404.
+
+Firmware sender ogsaa `X-Device-Token` header. Backend afviser scanninger uden korrekt token.
 
 ## API Endpoint
 
@@ -125,7 +129,7 @@ The OLED shows:
 
 ## Next Steps
 
-1. Implement `/api/scan` endpoint in PHP backend
-2. Add inventory management logic
-3. Implement "In/Out" mode selection on device
-4. Add local caching for offline scanning
+1. Add inventory management logic
+2. Add local caching for offline scanning
+3. Add product lookup from external food database
+4. Build final HMI design for operations

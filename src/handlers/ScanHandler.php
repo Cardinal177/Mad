@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 function handleScan(PDO $pdo): void
 {
+    $expectedDeviceToken = (string) (env_value('DEVICE_TOKEN', '') ?? '');
+    $requestDeviceToken = (string) ($_SERVER['HTTP_X_DEVICE_TOKEN'] ?? '');
+    if ($expectedDeviceToken !== '' && !hash_equals($expectedDeviceToken, $requestDeviceToken)) {
+        response(401, ['error' => 'Unauthorized device token']);
+        return;
+    }
+
     $data = parseJsonInput();
 
     if (!$data || empty($data['barcode'])) {
@@ -61,6 +68,44 @@ function handleScan(PDO $pdo): void
 
         // Record inventory movement
         $quantityDelta = ($movementType === 'out') ? -$quantity : $quantity;
+
+        // Server-side dedupe: ignore same scan repeated within 3 seconds.
+        $stmt = $pdo->prepare(
+            'SELECT id
+             FROM inventory_movements
+             WHERE household_id = ?
+               AND location_id = ?
+               AND product_id = ?
+               AND movement_type = ?
+               AND source = ?
+               AND ABS(quantity_delta - ?) < 0.0001
+               AND created_at >= (NOW() - INTERVAL 3 SECOND)
+             ORDER BY id DESC
+             LIMIT 1'
+        );
+        $stmt->execute([
+            $householdId,
+            $locationId,
+            $productId,
+            $movementType,
+            'esp32',
+            $quantityDelta,
+        ]);
+        $duplicate = $stmt->fetch();
+
+        if ($duplicate) {
+            $pdo->commit();
+            response(200, [
+                'status' => 'ok',
+                'message' => 'Duplicate scan ignored',
+                'barcode' => $barcode,
+                'product_id' => $productId,
+                'movement_type' => $movementType,
+                'quantity_delta' => $quantityDelta,
+                'duplicate_ignored' => true,
+            ]);
+            return;
+        }
 
         $stmt = $pdo->prepare(
             'INSERT INTO inventory_movements (household_id, location_id, product_id, movement_type, quantity_delta, source)
