@@ -98,7 +98,6 @@ function sendSmsViaInmobile(string $toPhoneE164, string $message): array
     $raw = curl_exec($ch);
     $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlErr = curl_error($ch);
-    curl_close($ch);
 
     if ($raw === false) {
         return ['ok' => false, 'error' => 'cURL error: ' . $curlErr];
