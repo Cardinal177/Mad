@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.7] - 2026-05-06 17:28
+
+### Changed
+- Fix ESP32 API 404: use raw HTTP request with explicit Host header for virtual-host routing
+
+
 ## [0.1.6] - 2026-05-06 17:24
 
 ### Changed
