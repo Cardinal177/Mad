@@ -315,6 +315,37 @@ declare(strict_types=1);
             border: 1px solid var(--line);
             background: var(--panel-strong);
         }
+        .inventory-card {
+            overflow: hidden;
+            background:
+                linear-gradient(180deg, rgba(255,252,247,0.98) 0%, rgba(246,238,227,0.92) 100%);
+        }
+        .inventory-visual {
+            display: grid;
+            grid-template-columns: 86px minmax(0, 1fr);
+            gap: 14px;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .inventory-image,
+        .inventory-image-fallback {
+            width: 86px;
+            height: 86px;
+            border-radius: 18px;
+        }
+        .inventory-image {
+            object-fit: cover;
+            background: #fff;
+            border: 1px solid rgba(20,35,29,0.08);
+        }
+        .inventory-image-fallback {
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, rgba(47,106,86,0.12), rgba(236,226,212,0.8));
+            color: var(--accent);
+            font-family: "Iowan Old Style", "Palatino Linotype", serif;
+            font-size: 28px;
+        }
         .inventory-top,
         .scan-top {
             display: flex;
@@ -335,6 +366,12 @@ declare(strict_types=1);
             color: var(--muted);
             font-size: 13px;
             line-height: 1.4;
+        }
+        .inventory-brand {
+            margin: 6px 0 0;
+            color: var(--accent);
+            font-size: 13px;
+            font-weight: 600;
         }
         .state-badge {
             display: inline-flex;
@@ -383,6 +420,36 @@ declare(strict_types=1);
             font-weight: 700;
             line-height: 1;
         }
+        .nutrition-strip {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .nutrition-chip {
+            padding: 10px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.72);
+            border: 1px solid rgba(20,35,29,0.06);
+        }
+        .nutrition-chip strong {
+            display: block;
+            font-size: 15px;
+            line-height: 1.1;
+        }
+        .nutrition-chip span {
+            display: block;
+            margin-top: 4px;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+        .nutrition-note {
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 12px;
+        }
         .scan-type {
             display: inline-flex;
             align-items: center;
@@ -419,6 +486,33 @@ declare(strict_types=1);
         .stack {
             display: grid;
             gap: 10px;
+        }
+        .collapsed-note {
+            margin: 0 0 14px;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .scan-disclosure {
+            border-top: 1px solid var(--line);
+            padding-top: 12px;
+        }
+        .scan-disclosure summary {
+            cursor: pointer;
+            list-style: none;
+            font-weight: 600;
+            color: var(--accent);
+        }
+        .scan-disclosure summary::-webkit-details-marker {
+            display: none;
+        }
+        .scan-disclosure[open] summary {
+            margin-bottom: 12px;
+        }
+        .scan-quiet {
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 12px;
         }
         .empty {
             padding: 18px;
@@ -527,19 +621,19 @@ declare(strict_types=1);
                 <div class="hero-actions">
                     <button class="action" type="button" id="refreshButton">Opdater nu</button>
                     <a class="action ghost" href="#inventorySection">Se lager</a>
-                    <a class="action ghost" href="#activitySection">Seneste flow</a>
+                    <a class="action ghost" href="#activitySection">Diskret scanlog</a>
                 </div>
             </div>
             <aside class="hero-aside">
                 <div class="card signal-card">
                     <span class="signal-label">Husets rytme</span>
                     <div class="signal-value" id="heroSummaryValue">0 varer</div>
-                    <div class="signal-meta" id="heroSummaryMeta">Vi henter live data fra lager og scanninger.</div>
+                    <div class="signal-meta" id="heroSummaryMeta">Vi henter live data fra lageret og viser fødevarer først.</div>
                 </div>
                 <div class="card signal-card">
-                    <span class="signal-label">Sidste aktivitet</span>
-                    <div class="signal-value" id="latestMovementValue">Ingen endnu</div>
-                    <div class="signal-meta" id="latestMovementMeta">Når scannerne bliver brugt, dukker strømmen op her.</div>
+                    <span class="signal-label">Næste fokus</span>
+                    <div class="signal-value" id="latestMovementValue">Roligt overblik</div>
+                    <div class="signal-meta" id="latestMovementMeta">Scanning lever i baggrunden. Kortene samler det, du skal bruge i hverdagen.</div>
                 </div>
             </aside>
         </section>
@@ -559,7 +653,7 @@ declare(strict_types=1);
         <article class="metric">
             <div class="metric-name">Seneste bevægelser</div>
             <div class="metric-value" id="scanCount">0</div>
-            <p class="metric-note" id="scanSummary">Auto-refresh hvert 5. sekund for scannerflowet.</p>
+            <p class="metric-note" id="scanSummary">Scannerflow gemmes væk, men er stadig tilgængeligt ved behov.</p>
         </article>
     </section>
 
@@ -579,12 +673,16 @@ declare(strict_types=1);
             <section class="card section" id="activitySection">
                 <div class="section-head">
                     <div>
-                        <p class="section-kicker">Flow</p>
-                        <h2 class="section-title">Seneste scanninger</h2>
+                        <p class="section-kicker">Baggrundslog</p>
+                        <h2 class="section-title">Scanhistorik er gemt væk</h2>
                     </div>
                     <div class="chip" id="activityChip">0 hændelser</div>
                 </div>
-                <div class="flow-grid" id="scansBody"></div>
+                <p class="collapsed-note">Tidspunkter og barcodes er stadig gemt, men de skal ikke dominere HMI'et. Åbn kun loggen når du vil fejlfinde eller se de seneste bevægelser.</p>
+                <details class="scan-disclosure">
+                    <summary>Vis scanlog</summary>
+                    <div class="flow-grid" id="scansBody"></div>
+                </details>
             </section>
 
             <section class="card section" id="nextSection">
@@ -651,6 +749,33 @@ function formatQuantity(value) {
     return Number.isInteger(quantity) ? String(quantity) : quantity.toFixed(1);
 }
 
+function formatNutritionValue(value, unit = 'g') {
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) {
+        return '–';
+    }
+    if (Number.isInteger(numeric)) {
+        return `${numeric} ${unit}`;
+    }
+    return `${numeric.toFixed(1)} ${unit}`;
+}
+
+function nutritionForProduct(product) {
+    if (!product.nutrition_json) {
+        return null;
+    }
+
+    if (typeof product.nutrition_json === 'object') {
+        return product.nutrition_json;
+    }
+
+    try {
+        return JSON.parse(product.nutrition_json);
+    } catch {
+        return null;
+    }
+}
+
 function stateForProduct(product) {
     const quantity = Number(product.quantity ?? 0);
     const minimum = Number(product.minimum_quantity ?? 0);
@@ -674,13 +799,36 @@ function renderProducts(products) {
 
     body.innerHTML = products.map(product => {
         const state = stateForProduct(product);
-        return `<article class="inventory-card">
-            <div class="inventory-top">
-                <div>
-                    <h3 class="inventory-name">${esc(product.name || 'Ukendt vare')}</h3>
-                    <p class="inventory-code">Barcode ${esc(product.barcode || '-')}</p>
+        const nutrition = nutritionForProduct(product);
+        const image = product.image_url ? `<img class="inventory-image" src="${esc(product.image_url)}" alt="${esc(product.name || 'Varebillede')}">` : `<div class="inventory-image-fallback">${esc((product.name || 'M').slice(0, 1).toUpperCase())}</div>`;
+        const nutritionStrip = nutrition ? `<div class="nutrition-strip">
+                <div class="nutrition-chip">
+                    <strong>${esc(formatNutritionValue(nutrition.energy_kcal, 'kcal'))}</strong>
+                    <span>Energi</span>
                 </div>
-                <span class="state-badge ${state.className}">${esc(state.label)}</span>
+                <div class="nutrition-chip">
+                    <strong>${esc(formatNutritionValue(nutrition.protein_g))}</strong>
+                    <span>Protein</span>
+                </div>
+                <div class="nutrition-chip">
+                    <strong>${esc(formatNutritionValue(nutrition.sugars_g))}</strong>
+                    <span>Sukker</span>
+                </div>
+            </div>
+            <div class="nutrition-note">Næringsoplysninger pr. ${esc(nutrition.per || '100g')}.</div>` : '<div class="nutrition-note">Næringsoplysninger kommer ind, når varen er beriget fra maddatabasen.</div>';
+        return `<article class="inventory-card">
+            <div class="inventory-visual">
+                ${image}
+                <div>
+                    <div class="inventory-top">
+                        <div>
+                            <h3 class="inventory-name">${esc(product.name || 'Ukendt vare')}</h3>
+                            <p class="inventory-brand">${esc(product.brand || 'Ukendt brand')}</p>
+                        </div>
+                        <span class="state-badge ${state.className}">${esc(state.label)}</span>
+                    </div>
+                    <p class="inventory-code">Fødevarekort med lagerstatus og ernæring.</p>
+                </div>
             </div>
             <div class="inventory-meta">
                 <div class="meta-block">
@@ -692,6 +840,7 @@ function renderProducts(products) {
                     <div class="meta-value">${esc(formatQuantity(product.minimum_quantity ?? 0))}</div>
                 </div>
             </div>
+            ${nutritionStrip}
         </article>`;
     }).join('');
 }
@@ -710,20 +859,21 @@ function renderScans(scans) {
             <div class="scan-top">
                 <div>
                     <h3 class="scan-name">${esc(scan.product_name || 'Ukendt vare')}</h3>
-                    <p class="scan-time">${esc(scan.created_at || '')}</p>
+                    <p class="scan-time">Registreret i baggrunden som del af lagerflowet.</p>
                 </div>
                 <span class="scan-type ${isOut ? 'scan-out' : 'scan-in'}">${esc((scan.movement_type || 'in').toUpperCase())}</span>
             </div>
             <div class="scan-meta">
                 <div class="meta-block">
-                    <span class="meta-label">Barcode</span>
-                    <div class="meta-value">${esc(scan.barcode || '-')}</div>
+                    <span class="meta-label">Bevægelse</span>
+                    <div class="meta-value">${esc(isOut ? 'Ud' : 'Ind')}</div>
                 </div>
                 <div class="meta-block">
                     <span class="meta-label">Mængde</span>
                     <div class="meta-value">${esc(formatQuantity(scan.quantity_delta ?? 0))}</div>
                 </div>
             </div>
+            <div class="scan-quiet">Teknisk reference: ${esc(scan.created_at || '')} · ${esc(scan.barcode || '-')}</div>
         </article>`;
     }).join('');
 }
@@ -750,15 +900,15 @@ async function refresh() {
         document.getElementById('lowStockCount').textContent = String(lowStock);
         document.getElementById('activityChip').textContent = `${scans.length} hændelser`;
         document.getElementById('inventoryChip').textContent = `${Math.max(productList.length - lowStock, 0)} i balance`;
-        document.getElementById('scanSummary').textContent = scans.length ? 'Bevægelser opdateres automatisk hvert 5. sekund.' : 'Scannerflowet er klar, men der er endnu ingen hændelser.';
-        document.getElementById('productSummary').textContent = productList.length ? 'Antal kendte varer, der allerede er i hjemmets system.' : 'Ingen varer er endnu blevet oprettet i lageret.';
+        document.getElementById('scanSummary').textContent = scans.length ? 'Scanlog findes stadig, men er gjort diskret.' : 'Scannerflowet er klar, men ligger i baggrunden indtil der er brug for det.';
+        document.getElementById('productSummary').textContent = productList.length ? 'Fødevarer vises som kort med lagerstatus og ernæring, når data findes.' : 'Ingen varer er endnu blevet oprettet i lageret.';
         document.getElementById('lowStockSummary').textContent = lowStock ? 'Varer under eller ved minimum bør være næste fokus i indkøb.' : 'Ingen varer presser minimumsgrænsen lige nu.';
         document.getElementById('heroSummaryValue').textContent = `${productList.length} varer`;
-        document.getElementById('heroSummaryMeta').textContent = lowStock ? `${lowStock} varer kræver snart opmærksomhed.` : 'Lageret ser stabilt ud lige nu.';
-        document.getElementById('latestMovementValue').textContent = latest ? String(latest.movement_type || 'in').toUpperCase() : 'Ingen endnu';
+        document.getElementById('heroSummaryMeta').textContent = lowStock ? `${lowStock} varer kræver snart opmærksomhed.` : 'Lageret ser stabilt og mindre teknisk ud lige nu.';
+        document.getElementById('latestMovementValue').textContent = latest ? String(latest.product_name || 'Roligt overblik') : 'Roligt overblik';
         document.getElementById('latestMovementMeta').textContent = latest
-            ? `${latest.product_name || 'Ukendt vare'} blev registreret ${latest.created_at || ''}.`
-            : 'Når scannerne bliver brugt, dukker strømmen op her.';
+            ? `${latest.product_name || 'Ukendt vare'} er den senest registrerede fødevare i lageret.`
+            : 'Når nye fødevarer kommer ind, bliver kortene automatisk beriget her.';
         syncStatus.textContent = 'Synkroniseret ' + new Date().toLocaleTimeString('da-DK', {hour: '2-digit', minute: '2-digit'});
     } catch (e) {
         document.getElementById('scansBody').innerHTML = '<div class="empty">Fejl ved indlæsning af scannerflow.</div>';

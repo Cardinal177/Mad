@@ -51,15 +51,27 @@ function fetchOpenFoodFactsProduct(string $barcode): ?array
     $name = trim((string) ($product['product_name_da'] ?? $product['product_name'] ?? ''));
     $brand = trim((string) ($product['brands'] ?? ''));
     $imageUrl = trim((string) ($product['image_front_url'] ?? $product['image_url'] ?? ''));
+    $nutrition = is_array($product['nutriments'] ?? null) ? $product['nutriments'] : [];
 
     if ($name === '') {
         return null;
     }
 
+    $nutritionProfile = [
+        'per' => '100g',
+        'energy_kcal' => isset($nutrition['energy-kcal_100g']) ? (float) $nutrition['energy-kcal_100g'] : null,
+        'fat_g' => isset($nutrition['fat_100g']) ? (float) $nutrition['fat_100g'] : null,
+        'carbohydrates_g' => isset($nutrition['carbohydrates_100g']) ? (float) $nutrition['carbohydrates_100g'] : null,
+        'sugars_g' => isset($nutrition['sugars_100g']) ? (float) $nutrition['sugars_100g'] : null,
+        'protein_g' => isset($nutrition['proteins_100g']) ? (float) $nutrition['proteins_100g'] : null,
+        'salt_g' => isset($nutrition['salt_100g']) ? (float) $nutrition['salt_100g'] : null,
+    ];
+
     return [
         'name' => mb_substr($name, 0, 200),
         'brand' => $brand !== '' ? mb_substr($brand, 0, 120) : null,
         'image_url' => $imageUrl !== '' ? mb_substr($imageUrl, 0, 500) : null,
+        'nutrition_json' => $nutritionProfile,
     ];
 }
 
@@ -135,7 +147,7 @@ function handleScan(PDO $pdo): void
         $productLookupSource = 'existing';
         $productNameUsed = null;
 
-        $stmt = $pdo->prepare('SELECT id, name FROM products WHERE barcode = ? LIMIT 1');
+        $stmt = $pdo->prepare('SELECT id, name, brand, image_url, nutrition_json FROM products WHERE barcode = ? LIMIT 1');
         $stmt->execute([$barcode]);
         $product = $stmt->fetch();
 
@@ -144,25 +156,32 @@ function handleScan(PDO $pdo): void
             $name = $offProduct['name'] ?? placeholderProductName($barcode);
             $brand = $offProduct['brand'] ?? null;
             $imageUrl = $offProduct['image_url'] ?? null;
+            $nutritionJson = isset($offProduct['nutrition_json']) ? json_encode($offProduct['nutrition_json'], JSON_UNESCAPED_SLASHES) : null;
 
             $productLookupSource = $offProduct ? 'openfoodfacts' : 'placeholder';
             $productNameUsed = $name;
 
-            $stmt = $pdo->prepare('INSERT INTO products (barcode, name, brand, image_url) VALUES (?, ?, ?, ?)');
-            $stmt->execute([$barcode, $name, $brand, $imageUrl]);
+            $stmt = $pdo->prepare('INSERT INTO products (barcode, name, brand, image_url, nutrition_json) VALUES (?, ?, ?, ?, ?)');
+            $stmt->execute([$barcode, $name, $brand, $imageUrl, $nutritionJson]);
             $productId = (int) $pdo->lastInsertId();
         } else {
             $productId = (int) $product['id'];
 
             $currentName = (string) ($product['name'] ?? '');
-            if (str_starts_with($currentName, 'Scanned Product ')) {
+            $needsRefresh = str_starts_with($currentName, 'Scanned Product ')
+                || (($product['brand'] ?? null) === null)
+                || (($product['image_url'] ?? null) === null)
+                || (($product['nutrition_json'] ?? null) === null);
+
+            if ($needsRefresh) {
                 $offProduct = fetchOpenFoodFactsProduct($barcode);
                 if ($offProduct) {
-                    $stmt = $pdo->prepare('UPDATE products SET name = ?, brand = ?, image_url = ? WHERE id = ?');
+                    $stmt = $pdo->prepare('UPDATE products SET name = ?, brand = ?, image_url = ?, nutrition_json = ? WHERE id = ?');
                     $stmt->execute([
                         $offProduct['name'],
                         $offProduct['brand'] ?? null,
                         $offProduct['image_url'] ?? null,
+                        json_encode($offProduct['nutrition_json'] ?? null, JSON_UNESCAPED_SLASHES),
                         $productId,
                     ]);
                     $productLookupSource = 'openfoodfacts-refresh';
@@ -284,6 +303,8 @@ function handleProductList(PDO $pdo): void
                 p.barcode,
                 p.name,
                 p.brand,
+                p.image_url,
+                p.nutrition_json,
                 hi.quantity,
                 hi.minimum_quantity
              FROM products p
