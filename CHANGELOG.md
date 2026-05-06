@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.6] - 2026-05-06 18:45
+
+### Changed
+- Fix repeated scanner payloads and auto-refresh existing placeholder products from Open Food Facts
+
+
 ## [0.2.5] - 2026-05-06 18:38
 
 ### Changed
