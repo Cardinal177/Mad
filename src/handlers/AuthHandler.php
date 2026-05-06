@@ -57,10 +57,29 @@ function sendSmsViaInmobile(string $toPhoneE164, string $message): array
         return ['ok' => false, 'error' => 'Missing INMOBILE_API_URL or INMOBILE_API_TOKEN'];
     }
 
+    $normalized = preg_replace('/\D+/', '', $toPhoneE164 ?? '');
+    if ($normalized === null || $normalized === '') {
+        return ['ok' => false, 'error' => 'Invalid recipient phone number'];
+    }
+
+    $countryHint = substr($normalized, 0, 2);
+    $messageId = 'mad-' . bin2hex(random_bytes(8));
+    $validitySeconds = (int) (env_value('OTP_TTL_SECONDS', '300') ?? '300');
+    if ($validitySeconds < 60) {
+        $validitySeconds = 60;
+    }
+
     $payload = [
-        'from' => $sender,
-        'to' => $toPhoneE164,
-        'text' => $message,
+        'messages' => [[
+            'to' => $normalized,
+            'countryHint' => $countryHint,
+            'messageId' => $messageId,
+            'respectBlacklist' => true,
+            'validityPeriodInSeconds' => $validitySeconds,
+            'from' => $sender,
+            'text' => $message,
+            'encoding' => 'auto',
+        ]],
     ];
 
     $ch = curl_init($url);
@@ -69,9 +88,9 @@ function sendSmsViaInmobile(string $toPhoneE164, string $message): array
         CURLOPT_POST => true,
         CURLOPT_HTTPHEADER => [
             'Content-Type: application/json',
-            'Authorization: Bearer ' . $apiToken,
-            'X-Api-Token: ' . $apiToken,
         ],
+        CURLOPT_USERPWD => 'mad:' . $apiToken,
+        CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
         CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_SLASHES),
         CURLOPT_TIMEOUT => 15,
     ]);
@@ -86,7 +105,10 @@ function sendSmsViaInmobile(string $toPhoneE164, string $message): array
     }
 
     $parsed = json_decode((string) $raw, true);
-    $providerRef = is_array($parsed) ? (string) ($parsed['id'] ?? $parsed['messageId'] ?? '') : '';
+    $providerRef = '';
+    if (is_array($parsed)) {
+        $providerRef = (string) ($parsed['results'][0]['messageId'] ?? $parsed['results'][0]['id'] ?? $parsed['messageId'] ?? $parsed['id'] ?? '');
+    }
 
     if ($httpCode >= 200 && $httpCode < 300) {
         return ['ok' => true, 'provider_ref' => $providerRef];
