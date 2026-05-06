@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
   full_name VARCHAR(150) NOT NULL,
   phone_e164 VARCHAR(25) NOT NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_platform_admin TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_users_initials_phone (initials, phone_e164)
@@ -55,6 +56,10 @@ CREATE TABLE IF NOT EXISTS products (
   weight_grams INT UNSIGNED DEFAULT NULL,
   image_url VARCHAR(500) DEFAULT NULL,
   nutrition_json JSON DEFAULT NULL,
+  nutrition_source ENUM('unknown', 'off_label', 'frida_dtu', 'manual', 'placeholder') NOT NULL DEFAULT 'unknown',
+  nutrition_confidence DECIMAL(4,3) DEFAULT NULL,
+  frida_food_code VARCHAR(64) DEFAULT NULL,
+  nutrition_updated_at DATETIME DEFAULT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_products_barcode (barcode)

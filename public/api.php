@@ -12,6 +12,10 @@ require_once $baseDir . '/config/database.php';
 require_once $baseDir . '/src/api/Router.php';
 require_once $baseDir . '/src/handlers/ScanHandler.php';
 require_once $baseDir . '/src/handlers/AuthHandler.php';
+require_once $baseDir . '/src/handlers/AdminHandler.php';
+require_once $baseDir . '/src/handlers/AiHandler.php';
+require_once $baseDir . '/src/handlers/ConfigHandler.php';
+require_once $baseDir . '/src/handlers/NutritionHandler.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -35,6 +39,16 @@ try {
         exit;
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'locations') {
+        handleLocationList($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'recipes') {
+        handleRecipeList($pdo);
+        exit;
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'auth.request_code') {
         handleAuthRequestCode($pdo);
         exit;
@@ -52,6 +66,56 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'auth.test_sms') {
         handleAuthTestSms($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'admin.users') {
+        handleAdminListUsers($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'admin.users.create') {
+        handleAdminCreateUser($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'admin.households') {
+        handleAdminListHouseholds($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'admin.households.create') {
+        handleAdminCreateHousehold($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'admin.households.assign_user') {
+        handleAdminAssignUserToHousehold($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'ai.meal_ideas') {
+        handleAiMealIdeas($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'config.get') {
+        handleConfigGet($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'config.set') {
+        handleConfigSet($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'nutrition.quality') {
+        handleNutritionQualitySummary($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'nutrition.match.run') {
+        handleNutritionMatchRun($pdo);
         exit;
     }
 
@@ -82,10 +146,20 @@ try {
             '/api.php?endpoint=scan' => 'POST scan ingest endpoint',
             '/api.php?endpoint=products' => 'Current inventory product list',
             '/api.php?endpoint=recent' => 'Recent inventory scan movements',
+            '/api.php?endpoint=locations' => 'Household locations for authenticated user',
+            '/api.php?endpoint=recipes' => 'Household recipes for authenticated user',
             '/api.php?endpoint=auth.request_code' => 'POST request 2FA code by initials',
             '/api.php?endpoint=auth.verify_code' => 'POST verify 2FA code and issue access token',
             '/api.php?endpoint=auth.me' => 'GET current user from bearer token',
             '/api.php?endpoint=auth.test_sms' => 'POST send one test SMS by initials or phone number',
+            '/api.php?endpoint=admin.users' => 'GET platform admin user overview',
+            '/api.php?endpoint=admin.users.create' => 'POST create a user as platform admin',
+            '/api.php?endpoint=admin.households' => 'GET platform admin household overview',
+            '/api.php?endpoint=admin.households.create' => 'POST create a household as platform admin',
+            '/api.php?endpoint=admin.households.assign_user' => 'POST assign a user to a household as platform admin',
+            '/api.php?endpoint=ai.meal_ideas' => 'POST AI meal ideas from household inventory (Anthropic)',
+            '/api.php?endpoint=nutrition.quality' => 'GET nutrition data quality summary (platform admin)',
+            '/api.php?endpoint=nutrition.match.run' => 'POST run Frida-style nutrition auto match (platform admin)',
             '/' => 'Live test dashboard',
         ],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

@@ -1,6 +1,27 @@
 <?php
 
 declare(strict_types=1);
+
+$householdId = max(1, (int) ($_GET['household_id'] ?? 1));
+$householdName = trim((string) ($_GET['household_name'] ?? ''));
+
+if ($householdName == '') {
+    $householdName = 'Husstand ' . $householdId;
+}
+
+$allowedPages = ['overblik', 'madplan', 'opskrifter', 'lager', 'indkoeb', 'opsaetning'];
+$currentPage = strtolower(trim((string) ($_GET['page'] ?? 'overblik')));
+if (!in_array($currentPage, $allowedPages, true)) {
+    $currentPage = 'overblik';
+}
+
+$navParams = $_GET;
+unset($navParams['page']);
+
+$buildPageUrl = static function (string $page) use ($navParams): string {
+    $query = array_merge($navParams, ['page' => $page]);
+    return 'live.php?' . http_build_query($query);
+};
 ?>
 <!doctype html>
 <html lang="da">
@@ -67,11 +88,148 @@ declare(strict_types=1);
             gap: 16px;
             margin-bottom: 18px;
         }
+        .context-strip {
+            display: grid;
+            gap: 10px;
+        }
+        .context-grid {
+            display: grid;
+            gap: 10px;
+        }
+        .context-card {
+            padding: 14px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.68);
+            background: rgba(255, 252, 247, 0.72);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(18px);
+        }
+        .context-label {
+            display: block;
+            color: var(--muted);
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+        .context-value {
+            font-size: 18px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        .context-copy {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.45;
+        }
+        .source-line {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .source-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: rgba(47, 106, 86, 0.09);
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .source-pill.planned {
+            background: rgba(236, 226, 212, 0.78);
+            color: #6f5a42;
+        }
         .topbar {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
+        }
+        .page-menu {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .page-link {
+            display: inline-flex;
+            align-items: center;
+            min-height: 40px;
+            padding: 0 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(20,35,29,0.12);
+            background: rgba(255,252,247,0.76);
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+        .page-link.active {
+            background: var(--text);
+            color: #fbf7ef;
+            border-color: transparent;
+        }
+        .admin-only {
+        }
+        .auth-gate {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(20, 35, 29, 0.48);
+            backdrop-filter: blur(6px);
+        }
+        .auth-gate.hidden {
+            display: none;
+        }
+        .auth-card {
+            width: min(520px, 100%);
+            border: 1px solid rgba(255,255,255,0.68);
+            border-radius: 22px;
+            background: rgba(255,252,247,0.94);
+            box-shadow: var(--shadow);
+            padding: 18px;
+        }
+        .auth-card h2 {
+            margin: 0 0 8px;
+            font-family: "Iowan Old Style", "Palatino Linotype", serif;
+            font-size: 28px;
+            line-height: 1;
+        }
+        .auth-card p {
+            margin: 0 0 12px;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.45;
+        }
+        .auth-grid {
+            display: grid;
+            gap: 10px;
+        }
+        .auth-grid input {
+            width: 100%;
+            border: 1px solid rgba(20,35,29,0.14);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 15px;
+            color: var(--text);
+            background: rgba(255,255,255,0.8);
+        }
+        .auth-status {
+            margin-top: 10px;
+            min-height: 20px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+        .auth-status.err {
+            color: var(--berry);
         }
         .brand {
             display: inline-flex;
@@ -301,15 +459,27 @@ declare(strict_types=1);
             font-size: 13px;
             font-weight: 600;
         }
+        .section-copy {
+            margin: 0;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.5;
+        }
         .inventory-grid,
         .flow-grid,
-        .placeholder-grid {
+        .placeholder-grid,
+        .planner-grid,
+        .recipe-grid,
+        .settings-grid {
             display: grid;
             gap: 12px;
         }
         .inventory-card,
         .scan-card,
-        .placeholder-card {
+        .placeholder-card,
+        .planner-card,
+        .recipe-card,
+        .settings-card {
             padding: 16px;
             border-radius: 20px;
             border: 1px solid var(--line);
@@ -478,6 +648,227 @@ declare(strict_types=1);
             margin: 0 0 8px;
             font-size: 20px;
         }
+        .planner-card,
+        .recipe-card,
+        .settings-card {
+            background:
+                linear-gradient(180deg, rgba(255,252,247,0.96) 0%, rgba(244,236,226,0.9) 100%);
+        }
+        .planner-card h3,
+        .recipe-card h3,
+        .settings-card h3 {
+            margin: 0 0 8px;
+            font-size: 20px;
+        }
+        .planner-card p,
+        .recipe-card p,
+        .settings-card p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+        .planner-meta,
+        .settings-meta {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .mini-stat {
+            padding: 12px;
+            border-radius: 16px;
+            background: rgba(236, 226, 212, 0.58);
+        }
+        .mini-stat strong {
+            display: block;
+            font-size: 20px;
+            line-height: 1.1;
+        }
+        .mini-stat span {
+            display: block;
+            margin-top: 6px;
+            color: var(--muted);
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .recipe-list {
+            display: grid;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .recipe-line {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 0;
+            border-top: 1px solid rgba(20,35,29,0.08);
+        }
+        .recipe-line:first-child {
+            border-top: 0;
+            padding-top: 0;
+        }
+        .recipe-line strong {
+            display: block;
+            font-size: 15px;
+            line-height: 1.25;
+        }
+        .recipe-line span {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.4;
+            text-align: right;
+        }
+        .ai-panel {
+            margin-top: 12px;
+            padding: 14px;
+            border-radius: 16px;
+            border: 1px solid rgba(20,35,29,0.08);
+            background: rgba(255,255,255,0.72);
+        }
+        .ai-panel-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .ai-panel-head strong {
+            font-size: 14px;
+        }
+        .ai-action {
+            border: 0;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #fbf7ef;
+            background: var(--text);
+            cursor: pointer;
+        }
+        .ai-action:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+        .ai-status {
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+        .ai-result {
+            display: grid;
+            gap: 10px;
+        }
+        .ai-idea {
+            padding: 10px;
+            border-radius: 12px;
+            background: rgba(236,226,212,0.5);
+        }
+        .ai-idea h4 {
+            margin: 0 0 6px;
+            font-size: 15px;
+        }
+        .ai-idea p {
+            margin: 0;
+            font-size: 13px;
+            line-height: 1.45;
+            color: var(--muted);
+        }
+        .ai-list {
+            margin: 8px 0 0;
+            padding-left: 18px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        .admin-panel {
+            margin-top: 10px;
+            padding: 14px;
+            border-radius: 16px;
+            border: 1px solid rgba(20,35,29,0.08);
+            background: rgba(255,255,255,0.7);
+            display: grid;
+            gap: 12px;
+        }
+        .admin-row {
+            display: grid;
+            gap: 8px;
+        }
+        .admin-grid {
+            display: grid;
+            gap: 8px;
+        }
+        .admin-grid.cols-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .admin-grid.cols-3 {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .admin-label {
+            display: block;
+            color: var(--muted);
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .admin-input,
+        .admin-select {
+            width: 100%;
+            border: 1px solid rgba(20,35,29,0.12);
+            border-radius: 10px;
+            padding: 10px 11px;
+            font-size: 14px;
+            background: #fff;
+            color: var(--text);
+        }
+        .admin-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .admin-button {
+            border: 0;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #fbf7ef;
+            background: var(--text);
+            cursor: pointer;
+        }
+        .admin-button.alt {
+            color: var(--text);
+            background: rgba(236,226,212,0.95);
+            border: 1px solid rgba(20,35,29,0.1);
+        }
+        .admin-status {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.45;
+        }
+        .admin-list {
+            padding: 10px;
+            border-radius: 12px;
+            background: rgba(236,226,212,0.5);
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.5;
+            max-height: 150px;
+            overflow: auto;
+            white-space: pre-wrap;
+        }
+        .admin-divider {
+            border-top: 1px solid rgba(20,35,29,0.08);
+            padding-top: 10px;
+        }
+        @media (max-width: 520px) {
+            .admin-grid.cols-2,
+            .admin-grid.cols-3 {
+                grid-template-columns: 1fr;
+            }
+        }
         .placeholder-card p {
             margin: 0;
             color: var(--muted);
@@ -524,13 +915,13 @@ declare(strict_types=1);
         }
         .bottom-nav {
             position: fixed;
-            left: 12px;
-            right: 12px;
+            left: 50%;
+            transform: translateX(-50%);
             bottom: 12px;
             z-index: 2;
-            width: 100%;
+            width: min(96vw, 540px);
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 8px;
             padding: 10px;
             border: 1px solid rgba(255,255,255,0.72);
@@ -539,6 +930,9 @@ declare(strict_types=1);
             color: #f5efe6;
             box-shadow: 0 14px 30px rgba(20,35,29,0.26);
             backdrop-filter: blur(22px);
+        }
+        .layout.single-page {
+            grid-template-columns: 1fr;
         }
         .nav-item {
             display: grid;
@@ -552,6 +946,9 @@ declare(strict_types=1);
         .nav-item strong {
             font-size: 15px;
             line-height: 1;
+        }
+        .nav-item span {
+            text-align: center;
         }
         .nav-item.active {
             background: rgba(255,255,255,0.09);
@@ -569,8 +966,14 @@ declare(strict_types=1);
             .status-grid {
                 grid-template-columns: repeat(3, minmax(0, 1fr));
             }
+            .context-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
             .inventory-grid,
-            .placeholder-grid {
+            .placeholder-grid,
+            .planner-grid,
+            .recipe-grid,
+            .settings-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
             .flow-grid {
@@ -580,11 +983,6 @@ declare(strict_types=1);
                 grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.85fr);
                 align-items: start;
             }
-            .bottom-nav {
-                position: static;
-                max-width: 420px;
-                margin: 26px auto 0;
-            }
         }
         @media (min-width: 1080px) {
             .inventory-grid {
@@ -593,11 +991,32 @@ declare(strict_types=1);
             .flow-grid {
                 grid-template-columns: 1fr;
             }
+            .planner-grid,
+            .recipe-grid,
+            .settings-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        .bottom-nav {
+            display: none;
         }
     </style>
 </head>
 <body>
-<main class="app" id="top">
+<div id="authGate" class="auth-gate">
+    <div class="auth-card">
+        <h2>Log ind</h2>
+        <p>Skriv dine initialer. Vi sender en 2FA SMS-kode automatisk. Indtast derefter koden for at fortsætte.</p>
+        <div class="auth-grid">
+            <input id="gateInitials" type="text" maxlength="10" placeholder="Initialer (fx CMP)">
+            <input id="gateChallenge" type="text" placeholder="Challenge ID" readonly>
+            <input id="gateCode" type="text" maxlength="6" inputmode="numeric" placeholder="SMS kode (6 cifre)">
+        </div>
+        <div class="auth-status" id="gateStatus">2FA påkrævet.</div>
+    </div>
+</div>
+
+<main class="app" id="top" aria-hidden="true">
     <header class="masthead">
         <div class="topbar">
             <div class="brand">
@@ -613,15 +1032,48 @@ declare(strict_types=1);
             </div>
         </div>
 
-        <section class="hero">
+        <nav class="page-menu" aria-label="Sidemenu">
+            <a class="page-link<?= $currentPage === 'overblik' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('overblik'), ENT_QUOTES, 'UTF-8') ?>">Overblik</a>
+            <a class="page-link<?= $currentPage === 'madplan' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('madplan'), ENT_QUOTES, 'UTF-8') ?>">Madplan</a>
+            <a class="page-link<?= $currentPage === 'opskrifter' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('opskrifter'), ENT_QUOTES, 'UTF-8') ?>">Opskrifter</a>
+            <a class="page-link<?= $currentPage === 'lager' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('lager'), ENT_QUOTES, 'UTF-8') ?>">Lager</a>
+            <a class="page-link<?= $currentPage === 'indkoeb' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('indkoeb'), ENT_QUOTES, 'UTF-8') ?>">Indkob</a>
+            <a class="page-link<?= $currentPage === 'opsaetning' ? ' active' : '' ?> admin-only" id="setupMenuLink" href="opsaetning.php" style="display:none;">Opsaetning</a>
+        </nav>
+
+        <section class="context-strip" aria-label="Husstand og datakilder" id="overviewContext">
+            <div class="context-grid">
+                <article class="context-card">
+                    <span class="context-label">Aktiv husstand</span>
+                    <div class="context-value" id="householdLabel"><?= htmlspecialchars($householdName, ENT_QUOTES, 'UTF-8') ?></div>
+                    <p class="context-copy">HMI'et henter allerede lagerdata pr. husstand. Navigationen er lagt, så opskrifter, madplan og indkøb senere kan holdes adskilt pr. hjem uden at ændre hele fronten igen.</p>
+                </article>
+                <article class="context-card">
+                    <span class="context-label">Datagrundlag</span>
+                    <div class="context-value">Open Food Facts nu, Frida/DTU næste lag</div>
+                    <p class="context-copy">Open Food Facts er stadig hurtigste berigelse på scan. Frida/DTU er tænkt ind som mere kontrolleret næringskilde, når vi vil kvalitetssikre danske fødevarekort og opskriftsberegninger.</p>
+                    <div class="source-line">
+                        <span class="source-pill">Live: Open Food Facts</span>
+                        <span class="source-pill planned">Planlagt: Frida/DTU</span>
+                    </div>
+                </article>
+                <article class="context-card">
+                    <span class="context-label">Informationsarkitektur</span>
+                    <div class="context-value">Madplan først, scanning bagefter</div>
+                    <p class="context-copy">Skærmen er nu organiseret efter README-retningen: madplan, opskrifter, lager, indkøb og opsætning. Scanlog er stadig tilgængelig, men ikke længere hovedoplevelsen.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="hero" id="overviewHero">
             <div class="hero-copy">
                 <div class="eyebrow">Mobil HMI ramme</div>
                 <h1>Køkkenets rolige overblik.</h1>
-                <p>En mobil-først styreflade til lager, scanning og de næste rutiner omkring indkøb og madplan. Denne version holder fast i de live data, men lægger den visuelle retning for den rigtige HMI.</p>
+                <p>En mobil-først styreflade til madplan, opskrifter, lager og indkøb. Den bruger stadig live lagerdata, men navigationen er nu lagt som et rigtigt husstandsprodukt frem for et scanner-dashboard.</p>
                 <div class="hero-actions">
                     <button class="action" type="button" id="refreshButton">Opdater nu</button>
+                    <a class="action ghost" href="#madplanSection">Se madplan</a>
                     <a class="action ghost" href="#inventorySection">Se lager</a>
-                    <a class="action ghost" href="#activitySection">Diskret scanlog</a>
                 </div>
             </div>
             <aside class="hero-aside">
@@ -632,14 +1084,14 @@ declare(strict_types=1);
                 </div>
                 <div class="card signal-card">
                     <span class="signal-label">Næste fokus</span>
-                    <div class="signal-value" id="latestMovementValue">Roligt overblik</div>
-                    <div class="signal-meta" id="latestMovementMeta">Scanning lever i baggrunden. Kortene samler det, du skal bruge i hverdagen.</div>
+                    <div class="signal-value" id="latestMovementValue">Madplan</div>
+                    <div class="signal-meta" id="latestMovementMeta">Fødevarekort, opskrifter og indkøb hænger nu sammen som menu, så den videre udbygning kan ske uden ny informationsarkitektur.</div>
                 </div>
             </aside>
         </section>
     </header>
 
-    <section class="status-grid" aria-label="Statusoversigt">
+    <section class="status-grid" aria-label="Statusoversigt" id="overviewStats">
         <article class="metric">
             <div class="metric-name">Produkter i hjemmet</div>
             <div class="metric-value" id="productCount">0</div>
@@ -657,19 +1109,118 @@ declare(strict_types=1);
         </article>
     </section>
 
-    <div class="layout">
-        <section class="card section" id="inventorySection">
+    <div class="layout" id="mainLayout">
+        <section class="card section" id="madplanSection">
             <div class="section-head">
                 <div>
-                    <p class="section-kicker">Lagerblik</p>
-                    <h2 class="section-title">Hvad mangler snart opmærksomhed?</h2>
+                    <p class="section-kicker">Madplan</p>
+                    <h2 class="section-title">Ugens rytme bygges omkring husstanden</h2>
                 </div>
-                <div class="chip" id="inventoryChip">0 i balance</div>
+                <div class="chip" id="planChip">Madplan først</div>
             </div>
-            <div class="inventory-grid" id="productsBody"></div>
+            <p class="section-copy">README-retningen siger madplan før scanning. Derfor er første sektion nu reserveret til den ugevisning, der senere skal koble opskrifter, lagerstatus og indkøb sammen for den valgte husstand.</p>
+            <div class="planner-grid">
+                <article class="planner-card">
+                    <h3>Dagens beslutninger</h3>
+                    <p>Her kommer dagens måltider, lagertræk og eventuelle mangler. Skabelonen er nu på plads, så vi kan fylde den med rigtige opskrifter næste gang.</p>
+                    <div class="planner-meta">
+                        <div class="mini-stat">
+                            <strong id="plannedMealsValue">3</strong>
+                            <span>Planvinduer</span>
+                        </div>
+                        <div class="mini-stat">
+                            <strong id="attentionItemsValue">0</strong>
+                            <span>Kræver indkøb</span>
+                        </div>
+                    </div>
+                </article>
+                <article class="planner-card">
+                    <h3>Frida/DTU-spor</h3>
+                    <p>Open Food Facts løfter scan-flowet nu. Frida/DTU bør være næste datalag for danske referenceværdier, især når madplan og opskrifter skal kunne regne mere præcist på ernæring pr. husstand.</p>
+                    <div class="planner-meta">
+                        <div class="mini-stat">
+                            <strong>Nu</strong>
+                            <span>OFF til hurtige opslag</span>
+                        </div>
+                        <div class="mini-stat">
+                            <strong>Snart</strong>
+                            <span>Frida/DTU til kvalitet</span>
+                        </div>
+                    </div>
+                    <div class="ai-panel">
+                        <div class="ai-panel-head">
+                            <strong>AI madplansforslag (beta)</strong>
+                            <button type="button" class="ai-action" id="aiSuggestButton">Hent forslag</button>
+                        </div>
+                        <div class="ai-status" id="aiStatus">Kræver login + AI aktiveret i backend.</div>
+                        <div class="ai-result" id="aiResult"></div>
+                    </div>
+                </article>
+            </div>
         </section>
 
         <div class="stack">
+            <section class="card section" id="recipesSection">
+                <div class="section-head">
+                    <div>
+                        <p class="section-kicker">Opskrifter</p>
+                        <h2 class="section-title">Opskrifter som fælles arbejdslag</h2>
+                    </div>
+                    <div class="chip">Delbar mellem husstande</div>
+                </div>
+                <div class="recipe-grid">
+                    <article class="recipe-card">
+                        <h3>Opskriftssamling</h3>
+                        <p>Opskrifter bør kunne leve på tværs af husstande, mens lager og beholdning forbliver private. Det matcher README-kravet om delt opskriftssamling med separat lagerantal.</p>
+                        <div class="recipe-list">
+                            <div class="recipe-line">
+                                <strong>Hverdagsretter</strong>
+                                <span>lagerkobling og hurtige mangellister</span>
+                            </div>
+                            <div class="recipe-line">
+                                <strong>Fryseretter</strong>
+                                <span>lokation og portionslogik</span>
+                            </div>
+                            <div class="recipe-line">
+                                <strong>Delte favoritter</strong>
+                                <span>samme opskrift, forskellige husstande</span>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+            <section class="card section" id="inventorySection">
+                <div class="section-head">
+                    <div>
+                        <p class="section-kicker">Lagerblik</p>
+                        <h2 class="section-title">Hvad mangler snart opmærksomhed?</h2>
+                    </div>
+                    <div class="chip" id="inventoryChip">0 i balance</div>
+                </div>
+                <div class="inventory-grid" id="productsBody"></div>
+            </section>
+
+            <section class="card section" id="shoppingSection">
+                <div class="section-head">
+                    <div>
+                        <p class="section-kicker">Indkøb</p>
+                        <h2 class="section-title">Lav beholdning bliver til næste liste</h2>
+                    </div>
+                    <div class="chip" id="shoppingChip">0 klare kandidater</div>
+                </div>
+                <div class="placeholder-grid">
+                    <article class="placeholder-card">
+                        <h3>Automatisk indkøbsseddel</h3>
+                        <p>Varer under minimum kan blive næste mobil-liste. Når vi forbinder madplan og opskrifter, kan listen prioriteres efter både husholdningens behov og lokation.</p>
+                    </article>
+                    <article class="placeholder-card">
+                        <h3>Butik og tilbud</h3>
+                        <p>README peger på butikstilbud som næste lag. Denne zone er lagt klar til at samle butik, status og tilbud uden at flytte rundt på resten af HMI'et.</p>
+                    </article>
+                </div>
+            </section>
+
             <section class="card section" id="activitySection">
                 <div class="section-head">
                     <div>
@@ -685,21 +1236,132 @@ declare(strict_types=1);
                 </details>
             </section>
 
-            <section class="card section" id="nextSection">
+            <section class="card section" id="settingsSection">
                 <div class="section-head">
                     <div>
-                        <p class="section-kicker">Næste lag</p>
-                        <h2 class="section-title">Kommende HMI-zoner</h2>
+                        <p class="section-kicker">Opsætning</p>
+                        <h2 class="section-title">Tænk fler-husstande ind fra starten</h2>
                     </div>
                 </div>
-                <div class="placeholder-grid">
-                    <article class="placeholder-card">
-                        <h3>Indkøb</h3>
-                        <p>Lav beholdning kan blive næste input til en mobil indkøbsliste med prioritering, butik og status pr. vare.</p>
+                <div class="settings-grid">
+                    <article class="settings-card">
+                        <h3>Husstandsramme</h3>
+                        <p>Aktiv visning kører på husstand <strong>#<?= (int) $householdId ?></strong>. Fronten er nu bygget, så et senere husstandsskift kan ske som egentlig navigation i stedet for særkode i hver enkelt sektion.</p>
+                        <div class="settings-meta">
+                            <div class="mini-stat">
+                                <strong><?= (int) $householdId ?></strong>
+                                <span>Aktiv husstand</span>
+                            </div>
+                            <div class="mini-stat">
+                                <strong>klar</strong>
+                                <span>til husstandsskift</span>
+                            </div>
+                        </div>
                     </article>
-                    <article class="placeholder-card">
-                        <h3>Madplan</h3>
-                        <p>Opskrifter, sæson og lager kan samles i en daglig planvisning, så mobilen bliver den naturlige frontflade.</p>
+                    <article class="settings-card">
+                        <h3>Datakilder og styring</h3>
+                        <p>Open Food Facts bruges til scanberigelse. Frida/DTU bør næste gang beskrives som en egentlig integration med mapping, fallback-regler og brug i opskriftsberegninger pr. husstand.</p>
+                        <p style="margin-top:8px; font-size:13px;">API status og endpoint-oversigt: <a href="api.php" target="_blank" rel="noopener">åbn api.php</a></p>
+                        <p class="admin-only" id="setupInlineWrap" style="display:none; margin-top:6px; font-size:13px;"><a id="setupInlineLink" href="opsaetning.php" style="color:var(--accent);">→ Åbn Opsætning (API-nøgler, brugere, husstande)</a></p>
+                    </article>
+                    <article class="settings-card">
+                        <h3>Admin-konsol</h3>
+                        <p>Opret brugere, husstande og medlemskaber direkte her. Brug samme token som i resten af HMI'et.</p>
+                        <div class="admin-panel">
+                            <div class="admin-row">
+                                <label class="admin-label" for="adminAccessToken">Access token</label>
+                                <input class="admin-input" id="adminAccessToken" type="text" placeholder="Bearer token" autocomplete="off">
+                            </div>
+                            <div class="admin-row">
+                                <label class="admin-label" for="adminDeviceToken">Device token (kun til 2FA request/test sms)</label>
+                                <input class="admin-input" id="adminDeviceToken" type="text" placeholder="Valgfri X-Device-Token" autocomplete="off">
+                            </div>
+                            <div class="admin-actions">
+                                <button class="admin-button" type="button" id="saveAdminTokensButton">Gem tokens</button>
+                                <button class="admin-button alt" type="button" id="loadAdminOverviewButton">Indlaes oversigt</button>
+                            </div>
+                            <div class="admin-status" id="adminStatus">Klar. Gem token og indlaes oversigt.</div>
+                            <div class="admin-list" id="adminOverview">Ingen data indlaest endnu.</div>
+
+                            <div class="admin-divider"></div>
+
+                            <div class="admin-grid cols-2">
+                                <div>
+                                    <label class="admin-label" for="newHouseholdName">Ny husstand</label>
+                                    <input class="admin-input" id="newHouseholdName" type="text" placeholder="Fx Familie Hansen">
+                                </div>
+                                <div>
+                                    <label class="admin-label" for="newHouseholdAdminUser">Start admin (user id)</label>
+                                    <input class="admin-input" id="newHouseholdAdminUser" type="number" min="1" placeholder="Valgfri">
+                                </div>
+                            </div>
+                            <div class="admin-actions">
+                                <button class="admin-button" type="button" id="createHouseholdButton">Opret husstand</button>
+                            </div>
+
+                            <div class="admin-grid cols-3">
+                                <div>
+                                    <label class="admin-label" for="newUserInitials">Initialer</label>
+                                    <input class="admin-input" id="newUserInitials" type="text" maxlength="10" placeholder="TT">
+                                </div>
+                                <div>
+                                    <label class="admin-label" for="newUserName">Fulde navn</label>
+                                    <input class="admin-input" id="newUserName" type="text" placeholder="Test Bruger">
+                                </div>
+                                <div>
+                                    <label class="admin-label" for="newUserPhone">Telefon (E.164)</label>
+                                    <input class="admin-input" id="newUserPhone" type="text" placeholder="+4512345678">
+                                </div>
+                            </div>
+                            <div class="admin-actions">
+                                <button class="admin-button" type="button" id="createUserButton">Opret bruger</button>
+                            </div>
+
+                            <div class="admin-grid cols-3">
+                                <div>
+                                    <label class="admin-label" for="assignUserId">Bruger</label>
+                                    <select class="admin-select" id="assignUserId"></select>
+                                </div>
+                                <div>
+                                    <label class="admin-label" for="assignHouseholdId">Husstand</label>
+                                    <select class="admin-select" id="assignHouseholdId"></select>
+                                </div>
+                                <div>
+                                    <label class="admin-label" for="assignRole">Rolle</label>
+                                    <select class="admin-select" id="assignRole">
+                                        <option value="member">member</option>
+                                        <option value="admin">admin</option>
+                                        <option value="owner">owner</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="admin-actions">
+                                <button class="admin-button" type="button" id="assignMembershipButton">Tilknyt bruger til husstand</button>
+                            </div>
+
+                            <div class="admin-divider"></div>
+
+                            <div class="admin-grid cols-2">
+                                <div>
+                                    <label class="admin-label" for="twofaInitials">2FA initialer</label>
+                                    <input class="admin-input" id="twofaInitials" type="text" maxlength="10" placeholder="TT">
+                                </div>
+                                <div>
+                                    <label class="admin-label" for="twofaChallengeId">Challenge ID</label>
+                                    <input class="admin-input" id="twofaChallengeId" type="text" placeholder="Udfyldes automatisk ved request">
+                                </div>
+                            </div>
+                            <div class="admin-grid cols-2">
+                                <div>
+                                    <label class="admin-label" for="twofaCode">SMS kode</label>
+                                    <input class="admin-input" id="twofaCode" type="text" maxlength="6" placeholder="123456">
+                                </div>
+                            </div>
+                            <div class="admin-actions">
+                                <button class="admin-button alt" type="button" id="request2faButton">Request 2FA kode</button>
+                                <button class="admin-button alt" type="button" id="verify2faButton">Verificer 2FA kode</button>
+                            </div>
+                        </div>
                     </article>
                 </div>
             </section>
@@ -707,32 +1369,263 @@ declare(strict_types=1);
     </div>
 
     <nav class="bottom-nav" aria-label="Primær navigation">
-        <a class="nav-item active" href="#top">
-            <strong>◉</strong>
-            <span>Hjem</span>
+        <a class="nav-item active" href="#top" data-nav-target="top">
+            <strong>🏠</strong>
+            <span>Overblik</span>
         </a>
-        <a class="nav-item" href="#inventorySection">
-            <strong>◌</strong>
+        <a class="nav-item" href="#madplanSection" data-nav-target="madplanSection">
+            <strong>📅</strong>
+            <span>Madplan</span>
+        </a>
+        <a class="nav-item" href="#recipesSection" data-nav-target="recipesSection">
+            <strong>📖</strong>
+            <span>Opskrifter</span>
+        </a>
+        <a class="nav-item" href="#inventorySection" data-nav-target="inventorySection">
+            <strong>📦</strong>
             <span>Lager</span>
         </a>
-        <a class="nav-item" href="#activitySection">
-            <strong>◎</strong>
-            <span>Flow</span>
-        </a>
-        <a class="nav-item" href="#nextSection">
-            <strong>⌂</strong>
-            <span>Mere</span>
+        <a class="nav-item" href="#shoppingSection" data-nav-target="shoppingSection">
+            <strong>🛒</strong>
+            <span>Indkøb</span>
         </a>
     </nav>
 </main>
 
 <script>
+const householdId = <?= json_encode($householdId, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const params = new URLSearchParams(window.location.search);
+const queryAccessToken = params.get('access_token');
+
+if (queryAccessToken) {
+    window.localStorage.setItem('madAccessToken', queryAccessToken);
+}
+
+let accessToken = queryAccessToken || window.localStorage.getItem('madAccessToken') || '';
+let deviceToken = params.get('device_token') || window.localStorage.getItem('madDeviceToken') || '';
+let isPlatformAdmin = false;
+let gateSending = false;
+let gateVerifying = false;
+let gateLastInitials = '';
+
+if (params.get('device_token')) {
+    window.localStorage.setItem('madDeviceToken', params.get('device_token'));
+}
+
+function authHeaders(includeDeviceToken = false) {
+    const headers = {};
+    if (accessToken) {
+        headers.Authorization = 'Bearer ' + accessToken;
+    }
+    if (includeDeviceToken && deviceToken) {
+        headers['X-Device-Token'] = deviceToken;
+    }
+    return headers;
+}
+
+function setGateStatus(message, isError = false) {
+    const el = document.getElementById('gateStatus');
+    if (!el) {
+        return;
+    }
+    el.textContent = message;
+    el.classList.toggle('err', !!isError);
+}
+
+function setAdminOnlyVisibility(visible) {
+    document.querySelectorAll('.admin-only').forEach((el) => {
+        el.style.display = visible ? '' : 'none';
+    });
+}
+
+async function resolveSession() {
+    if (!accessToken) {
+        isPlatformAdmin = false;
+        setAdminOnlyVisibility(false);
+        return false;
+    }
+
+    try {
+        const me = await loadJson('api.php?endpoint=auth.me');
+        const user = me.user || {};
+        isPlatformAdmin = !!user.is_platform_admin;
+        setAdminOnlyVisibility(isPlatformAdmin);
+        return true;
+    } catch (_e) {
+        accessToken = '';
+        window.localStorage.removeItem('madAccessToken');
+        isPlatformAdmin = false;
+        setAdminOnlyVisibility(false);
+        return false;
+    }
+}
+
+function lockApp() {
+    const gate = document.getElementById('authGate');
+    const app = document.getElementById('top');
+    if (gate) {
+        gate.classList.remove('hidden');
+    }
+    if (app) {
+        app.setAttribute('aria-hidden', 'true');
+    }
+}
+
+function unlockApp() {
+    const gate = document.getElementById('authGate');
+    const app = document.getElementById('top');
+    if (gate) {
+        gate.classList.add('hidden');
+    }
+    if (app) {
+        app.setAttribute('aria-hidden', 'false');
+    }
+}
+
+async function requestGateCode() {
+    const initialsEl = document.getElementById('gateInitials');
+    const challengeEl = document.getElementById('gateChallenge');
+    if (!initialsEl || !challengeEl) {
+        return;
+    }
+
+    const initials = initialsEl.value.trim().toUpperCase();
+    initialsEl.value = initials;
+    if (!initials) {
+        setGateStatus('Skriv initialer for at modtage SMS-kode.', true);
+        return;
+    }
+    if (gateSending) {
+        return;
+    }
+    if (gateLastInitials === initials && challengeEl.value.trim() !== '') {
+        return;
+    }
+
+    gateSending = true;
+    gateLastInitials = initials;
+    setGateStatus('Sender SMS-kode...');
+    try {
+        const payload = await postJson('api.php?endpoint=auth.request_code', {initials}, {includeDeviceToken: false});
+        challengeEl.value = String(payload.challenge_id || '');
+        setGateStatus('SMS-kode sendt. Indtast de 6 cifre for at logge ind.');
+    } catch (error) {
+        gateLastInitials = '';
+        setGateStatus('Kunne ikke sende SMS-kode: ' + (error?.message || 'Ukendt fejl'), true);
+    }
+    gateSending = false;
+}
+
+async function verifyGateCode() {
+    const initialsEl = document.getElementById('gateInitials');
+    const challengeEl = document.getElementById('gateChallenge');
+    const codeEl = document.getElementById('gateCode');
+    if (!initialsEl || !challengeEl || !codeEl) {
+        return;
+    }
+
+    codeEl.value = codeEl.value.replace(/\D+/g, '').slice(0, 6);
+    const initials = initialsEl.value.trim().toUpperCase();
+    const challengeId = challengeEl.value.trim();
+    const code = codeEl.value.trim();
+
+    if (!initials || !challengeId || code.length !== 6) {
+        return;
+    }
+    if (gateVerifying) {
+        return;
+    }
+
+    gateVerifying = true;
+    setGateStatus('Verificerer kode...');
+    try {
+        const payload = await postJson('api.php?endpoint=auth.verify_code', {
+            initials,
+            challenge_id: challengeId,
+            code,
+        }, {includeDeviceToken: false});
+
+        if (!payload.access_token) {
+            throw new Error('Manglende access token');
+        }
+
+        accessToken = payload.access_token;
+        window.localStorage.setItem('madAccessToken', accessToken);
+
+        const ok = await resolveSession();
+        if (!ok) {
+            throw new Error('Session kunne ikke valideres');
+        }
+
+        unlockApp();
+        refresh();
+        setGateStatus('Logget ind.');
+    } catch (error) {
+        setGateStatus('Login fejlede: ' + (error?.message || 'Ukendt fejl'), true);
+        codeEl.value = '';
+    }
+    gateVerifying = false;
+}
+
+function initAuthGate() {
+    const initialsEl = document.getElementById('gateInitials');
+    const codeEl = document.getElementById('gateCode');
+    if (!initialsEl || !codeEl) {
+        return;
+    }
+
+    initialsEl.addEventListener('blur', requestGateCode);
+    initialsEl.addEventListener('change', requestGateCode);
+    initialsEl.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            requestGateCode();
+        }
+    });
+
+    codeEl.addEventListener('input', verifyGateCode);
+}
+
+async function enforceAuthGate() {
+    setAdminOnlyVisibility(false);
+    const ok = await resolveSession();
+    if (ok) {
+        unlockApp();
+        return;
+    }
+    lockApp();
+}
+
 async function loadJson(url) {
-    const res = await fetch(url, {cache: 'no-store'});
+    const res = await fetch(url, {
+        cache: 'no-store',
+        headers: authHeaders(),
+    });
     if (!res.ok) {
         throw new Error('HTTP ' + res.status);
     }
     return await res.json();
+}
+
+async function postJson(url, body, options = {}) {
+    const headers = {
+        'Content-Type': 'application/json',
+        ...authHeaders(!!options.includeDeviceToken),
+    };
+
+    const res = await fetch(url, {
+        method: 'POST',
+        cache: 'no-store',
+        headers,
+        body: JSON.stringify(body || {}),
+    });
+
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const details = payload.details ? `: ${payload.details}` : '';
+        throw new Error(`HTTP ${res.status}${details}`);
+    }
+    return payload;
 }
 
 function esc(v) {
@@ -878,19 +1771,364 @@ function renderScans(scans) {
     }).join('');
 }
 
+function setActiveNav(targetId) {
+    document.querySelectorAll('[data-nav-target]').forEach(link => {
+        link.classList.toggle('active', link.dataset.navTarget === targetId);
+    });
+}
+
+function setVisible(id, visible) {
+    const el = document.getElementById(id);
+    if (!el) {
+        return;
+    }
+    el.style.display = visible ? '' : 'none';
+}
+
+function applyTraditionalPage(page) {
+    const layout = document.getElementById('mainLayout');
+    const showOverview = page === 'overblik';
+
+    setVisible('overviewContext', showOverview);
+    setVisible('overviewHero', showOverview);
+    setVisible('overviewStats', showOverview);
+
+    setVisible('madplanSection', page === 'madplan');
+    setVisible('recipesSection', page === 'opskrifter');
+    setVisible('inventorySection', page === 'lager');
+    setVisible('activitySection', page === 'lager');
+    setVisible('shoppingSection', page === 'indkoeb');
+    setVisible('settingsSection', page === 'opsaetning');
+
+    if (layout) {
+        layout.classList.toggle('single-page', page !== 'overblik');
+        layout.style.display = page === 'overblik' ? 'none' : '';
+    }
+}
+
+function updateNavFromHash() {
+    const hash = window.location.hash.replace('#', '');
+    const fallback = 'top';
+    const targetId = hash || fallback;
+
+    if (document.getElementById(targetId)) {
+        setActiveNav(targetId);
+    } else {
+        setActiveNav(fallback);
+    }
+}
+
+function renderAiIdeas(payload) {
+    const aiResult = document.getElementById('aiResult');
+    const aiStatus = document.getElementById('aiStatus');
+    const ideas = Array.isArray(payload.meal_ideas) ? payload.meal_ideas : [];
+
+    aiStatus.textContent = payload.summary || 'Forslag klar.';
+
+    if (!ideas.length) {
+        aiResult.innerHTML = '<div class="empty">Ingen konkrete forslag i svaret endnu.</div>';
+        return;
+    }
+
+    aiResult.innerHTML = ideas.slice(0, 3).map(idea => {
+        const uses = Array.isArray(idea.uses_products) ? idea.uses_products : [];
+        const missing = Array.isArray(idea.missing_items) ? idea.missing_items : [];
+        return `<article class="ai-idea">
+            <h4>${esc(idea.name || 'Forslag')}</h4>
+            <p>${esc(idea.why || '')}</p>
+            <ul class="ai-list">
+                <li><strong>Bruger fra lager:</strong> ${esc(uses.join(', ') || 'Ikke angivet')}</li>
+                <li><strong>Mangler:</strong> ${esc(missing.join(', ') || 'Intet')}</li>
+            </ul>
+        </article>`;
+    }).join('');
+}
+
+function setAdminStatus(message) {
+    const el = document.getElementById('adminStatus');
+    if (el) {
+        el.textContent = message;
+    }
+}
+
+function fillSelect(selectId, items, formatter) {
+    const select = document.getElementById(selectId);
+    if (!select) {
+        return;
+    }
+
+    select.innerHTML = items.map(item => `<option value="${esc(item.value)}">${esc(item.label)}</option>`).join('');
+    if (!items.length) {
+        select.innerHTML = '<option value="">Ingen data</option>';
+    }
+    if (typeof formatter === 'function') {
+        formatter(select);
+    }
+}
+
+function setTokenFromInputs() {
+    const accessInput = document.getElementById('adminAccessToken');
+    const deviceInput = document.getElementById('adminDeviceToken');
+
+    accessToken = (accessInput?.value || '').trim();
+    deviceToken = (deviceInput?.value || '').trim();
+
+    if (accessToken) {
+        window.localStorage.setItem('madAccessToken', accessToken);
+    }
+    if (deviceToken) {
+        window.localStorage.setItem('madDeviceToken', deviceToken);
+    }
+}
+
+async function loadAdminOverview() {
+    setTokenFromInputs();
+    if (!accessToken) {
+        setAdminStatus('Indtast access token for at bruge admin-konsollen.');
+        return;
+    }
+
+    setAdminStatus('Indlaeser brugere og husstande...');
+
+    try {
+        const [usersPayload, householdsPayload] = await Promise.all([
+            loadJson('api.php?endpoint=admin.users'),
+            loadJson('api.php?endpoint=admin.households'),
+        ]);
+
+        const users = Array.isArray(usersPayload.users) ? usersPayload.users : [];
+        const households = Array.isArray(householdsPayload.households) ? householdsPayload.households : [];
+
+        fillSelect('assignUserId', users.map(user => ({
+            value: String(user.id),
+            label: `${user.id} - ${user.full_name} (${user.initials})`,
+        })));
+
+        fillSelect('assignHouseholdId', households.map(household => ({
+            value: String(household.id),
+            label: `${household.id} - ${household.name}`,
+        })));
+
+        const userLines = users.map(user => {
+            const memberships = Array.isArray(user.households) && user.households.length
+                ? user.households.map(h => `${h.name} (${h.role})`).join(', ')
+                : 'ingen husstand';
+            return `${user.id} ${user.initials} ${user.full_name} -> ${memberships}`;
+        });
+
+        const householdLines = households.map(h => `${h.id} ${h.name} | users: ${h.user_count}`);
+        document.getElementById('adminOverview').textContent =
+            'Brugere:\n' + (userLines.join('\n') || 'Ingen') + '\n\nHusstande:\n' + (householdLines.join('\n') || 'Ingen');
+
+        setAdminStatus(`Oversigt opdateret (${users.length} brugere, ${households.length} husstande).`);
+    } catch (error) {
+        setAdminStatus('Fejl ved indlaesning af admin-overblik: ' + (error?.message || 'Ukendt fejl'));
+    }
+}
+
+async function createHouseholdFromForm() {
+    setTokenFromInputs();
+    const name = document.getElementById('newHouseholdName').value.trim();
+    const adminUserIdRaw = document.getElementById('newHouseholdAdminUser').value.trim();
+
+    if (!name) {
+        setAdminStatus('Angiv navn paa ny husstand.');
+        return;
+    }
+
+    const body = {name};
+    if (adminUserIdRaw !== '') {
+        body.admin_user_id = Number(adminUserIdRaw);
+    }
+
+    try {
+        const payload = await postJson('api.php?endpoint=admin.households.create', body);
+        setAdminStatus('Husstand oprettet: #' + payload.household.id + ' ' + payload.household.name);
+        document.getElementById('newHouseholdName').value = '';
+        await loadAdminOverview();
+    } catch (error) {
+        setAdminStatus('Kunne ikke oprette husstand: ' + (error?.message || 'Ukendt fejl'));
+    }
+}
+
+async function createUserFromForm() {
+    setTokenFromInputs();
+    const initials = document.getElementById('newUserInitials').value.trim().toUpperCase();
+    const fullName = document.getElementById('newUserName').value.trim();
+    const phone = document.getElementById('newUserPhone').value.trim();
+
+    if (!initials || !fullName || !phone) {
+        setAdminStatus('Udfyld initialer, navn og telefon for ny bruger.');
+        return;
+    }
+
+    try {
+        const payload = await postJson('api.php?endpoint=admin.users.create', {
+            initials,
+            full_name: fullName,
+            phone_e164: phone,
+            is_active: 1,
+        });
+        setAdminStatus('Bruger oprettet: #' + payload.user.id + ' ' + payload.user.full_name);
+        document.getElementById('newUserInitials').value = '';
+        document.getElementById('newUserName').value = '';
+        document.getElementById('newUserPhone').value = '';
+        await loadAdminOverview();
+    } catch (error) {
+        setAdminStatus('Kunne ikke oprette bruger: ' + (error?.message || 'Ukendt fejl'));
+    }
+}
+
+async function assignMembershipFromForm() {
+    setTokenFromInputs();
+    const userId = Number(document.getElementById('assignUserId').value || 0);
+    const householdIdSelect = Number(document.getElementById('assignHouseholdId').value || 0);
+    const role = document.getElementById('assignRole').value;
+
+    if (!userId || !householdIdSelect) {
+        setAdminStatus('Vaelg baade bruger og husstand.');
+        return;
+    }
+
+    try {
+        await postJson('api.php?endpoint=admin.households.assign_user', {
+            user_id: userId,
+            household_id: householdIdSelect,
+            role,
+        });
+        setAdminStatus(`Bruger ${userId} tilknyttet husstand ${householdIdSelect} som ${role}.`);
+        await loadAdminOverview();
+    } catch (error) {
+        setAdminStatus('Kunne ikke tilknytte bruger: ' + (error?.message || 'Ukendt fejl'));
+    }
+}
+
+async function requestTwoFaCodeFromForm() {
+    setTokenFromInputs();
+    const initials = document.getElementById('twofaInitials').value.trim().toUpperCase();
+    if (!initials) {
+        setAdminStatus('Angiv initialer for 2FA request.');
+        return;
+    }
+
+    try {
+        const payload = await postJson('api.php?endpoint=auth.request_code', {initials}, {includeDeviceToken: true});
+        if (payload.challenge_id) {
+            document.getElementById('twofaChallengeId').value = payload.challenge_id;
+        }
+        setAdminStatus('2FA kode sendt. Challenge: ' + (payload.challenge_id || 'ukendt'));
+    } catch (error) {
+        setAdminStatus('Kunne ikke anmode 2FA kode: ' + (error?.message || 'Ukendt fejl'));
+    }
+}
+
+async function verifyTwoFaCodeFromForm() {
+    setTokenFromInputs();
+    const challengeId = document.getElementById('twofaChallengeId').value.trim();
+    const code = document.getElementById('twofaCode').value.trim();
+
+    if (!challengeId || !code) {
+        setAdminStatus('Angiv baade challenge id og SMS kode.');
+        return;
+    }
+
+    try {
+        const payload = await postJson('api.php?endpoint=auth.verify_code', {
+            challenge_id: challengeId,
+            code,
+        }, {includeDeviceToken: true});
+
+        if (payload.access_token) {
+            accessToken = payload.access_token;
+            window.localStorage.setItem('madAccessToken', accessToken);
+            const accessInput = document.getElementById('adminAccessToken');
+            if (accessInput) {
+                accessInput.value = accessToken;
+            }
+        }
+
+        setAdminStatus('2FA verificeret. Nyt access token gemt.');
+        await loadAdminOverview();
+        refresh();
+    } catch (error) {
+        setAdminStatus('Kunne ikke verificere 2FA kode: ' + (error?.message || 'Ukendt fejl'));
+    }
+}
+
+function initAdminConsole() {
+    const accessInput = document.getElementById('adminAccessToken');
+    const deviceInput = document.getElementById('adminDeviceToken');
+    if (accessInput) {
+        accessInput.value = accessToken;
+    }
+    if (deviceInput) {
+        deviceInput.value = deviceToken;
+    }
+
+    document.getElementById('saveAdminTokensButton').addEventListener('click', () => {
+        setTokenFromInputs();
+        setAdminStatus('Tokens gemt lokalt i browseren.');
+        refresh();
+    });
+    document.getElementById('loadAdminOverviewButton').addEventListener('click', loadAdminOverview);
+    document.getElementById('createHouseholdButton').addEventListener('click', createHouseholdFromForm);
+    document.getElementById('createUserButton').addEventListener('click', createUserFromForm);
+    document.getElementById('assignMembershipButton').addEventListener('click', assignMembershipFromForm);
+    document.getElementById('request2faButton').addEventListener('click', requestTwoFaCodeFromForm);
+    document.getElementById('verify2faButton').addEventListener('click', verifyTwoFaCodeFromForm);
+}
+
+async function fetchAiIdeas() {
+    const aiButton = document.getElementById('aiSuggestButton');
+    const aiStatus = document.getElementById('aiStatus');
+    const aiResult = document.getElementById('aiResult');
+
+    if (!accessToken) {
+        aiStatus.textContent = 'Log ind foerst. AI bruger samme adgangstoken som resten af husstanden.';
+        aiResult.innerHTML = '';
+        return;
+    }
+
+    aiButton.disabled = true;
+    aiStatus.textContent = 'Henter forslag fra AI...';
+
+    try {
+        const payload = await postJson('api.php?endpoint=ai.meal_ideas', {
+            household_id: householdId,
+        });
+        renderAiIdeas(payload);
+    } catch (error) {
+        aiStatus.textContent = 'AI-fejl: ' + (error?.message || 'Ukendt fejl');
+        aiResult.innerHTML = '<div class="empty">Kunne ikke hente AI-forslag lige nu.</div>';
+    } finally {
+        aiButton.disabled = false;
+    }
+}
+
 async function refresh() {
     const syncStatus = document.getElementById('syncStatus');
 
+    if (!accessToken) {
+        document.getElementById('scansBody').innerHTML = '<div class="empty">Log ind for at se husstandens scanlog.</div>';
+        document.getElementById('productsBody').innerHTML = '<div class="empty">Log ind for at se husstandens varer og lokationer.</div>';
+        document.getElementById('productSummary').textContent = 'Data er nu knyttet til den bruger og de husstande, du er tildelt.';
+        document.getElementById('scanSummary').textContent = 'Scanlog vises kun for den aktive husstand efter login.';
+        document.getElementById('heroSummaryMeta').textContent = 'Adgangen er nu husstands-styret. Hent et access token via login, og aabn siden med access_token i URL eller localStorage.';
+        syncStatus.textContent = 'Gaestetilstand';
+        return;
+    }
+
     try {
         const [recent, products] = await Promise.all([
-            loadJson('api.php?endpoint=recent&limit=25'),
-            loadJson('api.php?endpoint=products')
+            loadJson(`api.php?endpoint=recent&limit=25&household_id=${encodeURIComponent(householdId)}`),
+            loadJson(`api.php?endpoint=products&household_id=${encodeURIComponent(householdId)}`)
         ]);
 
         const scans = recent.scans || [];
         const productList = products.products || [];
         const lowStock = productList.filter(product => Number(product.quantity ?? 0) <= Number(product.minimum_quantity ?? 0)).length;
         const latest = scans[0] || null;
+        const balanced = Math.max(productList.length - lowStock, 0);
 
         renderScans(scans);
         renderProducts(productList);
@@ -899,15 +2137,18 @@ async function refresh() {
         document.getElementById('productCount').textContent = String(productList.length);
         document.getElementById('lowStockCount').textContent = String(lowStock);
         document.getElementById('activityChip').textContent = `${scans.length} hændelser`;
-        document.getElementById('inventoryChip').textContent = `${Math.max(productList.length - lowStock, 0)} i balance`;
+        document.getElementById('inventoryChip').textContent = `${balanced} i balance`;
+        document.getElementById('shoppingChip').textContent = `${lowStock} klare kandidater`;
+        document.getElementById('planChip').textContent = `${productList.length ? 'Klar til ugeblik' : 'Afventer varer'}`;
+        document.getElementById('attentionItemsValue').textContent = String(lowStock);
         document.getElementById('scanSummary').textContent = scans.length ? 'Scanlog findes stadig, men er gjort diskret.' : 'Scannerflowet er klar, men ligger i baggrunden indtil der er brug for det.';
-        document.getElementById('productSummary').textContent = productList.length ? 'Fødevarer vises som kort med lagerstatus og ernæring, når data findes.' : 'Ingen varer er endnu blevet oprettet i lageret.';
+        document.getElementById('productSummary').textContent = productList.length ? 'Fødevarer vises som husstandens kort med lagerstatus og ernæring, når data findes.' : 'Ingen varer er endnu blevet oprettet i lageret.';
         document.getElementById('lowStockSummary').textContent = lowStock ? 'Varer under eller ved minimum bør være næste fokus i indkøb.' : 'Ingen varer presser minimumsgrænsen lige nu.';
         document.getElementById('heroSummaryValue').textContent = `${productList.length} varer`;
-        document.getElementById('heroSummaryMeta').textContent = lowStock ? `${lowStock} varer kræver snart opmærksomhed.` : 'Lageret ser stabilt og mindre teknisk ud lige nu.';
-        document.getElementById('latestMovementValue').textContent = latest ? String(latest.product_name || 'Roligt overblik') : 'Roligt overblik';
+        document.getElementById('heroSummaryMeta').textContent = lowStock ? `${lowStock} varer kræver snart opmærksomhed i ${document.getElementById('householdLabel').textContent}.` : 'Lageret ser stabilt og mindre teknisk ud lige nu.';
+        document.getElementById('latestMovementValue').textContent = latest ? 'Lager + plan' : 'Madplan';
         document.getElementById('latestMovementMeta').textContent = latest
-            ? `${latest.product_name || 'Ukendt vare'} er den senest registrerede fødevare i lageret.`
+            ? `${latest.product_name || 'Ukendt vare'} er senest registreret og kan senere indgå direkte i madplan og indkøb for husstanden.`
             : 'Når nye fødevarer kommer ind, bliver kortene automatisk beriget her.';
         syncStatus.textContent = 'Synkroniseret ' + new Date().toLocaleTimeString('da-DK', {hour: '2-digit', minute: '2-digit'});
     } catch (e) {
@@ -918,7 +2159,17 @@ async function refresh() {
 }
 
 document.getElementById('refreshButton').addEventListener('click', refresh);
-refresh();
+document.getElementById('aiSuggestButton').addEventListener('click', fetchAiIdeas);
+window.addEventListener('hashchange', updateNavFromHash);
+initAdminConsole();
+applyTraditionalPage(<?= json_encode($currentPage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
+updateNavFromHash();
+initAuthGate();
+enforceAuthGate().then(() => {
+    if (accessToken) {
+        refresh();
+    }
+});
 setInterval(refresh, 5000);
 </script>
 </body>

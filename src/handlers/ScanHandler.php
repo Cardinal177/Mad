@@ -79,6 +79,21 @@ function placeholderProductName(string $barcode): string
     return 'Scanned Product ' . substr($barcode, 0, 8);
 }
 
+function scanProductsHasColumn(PDO $pdo, string $column): bool
+{
+    static $cache = [];
+
+    if (array_key_exists($column, $cache)) {
+        return $cache[$column];
+    }
+
+    $stmt = $pdo->prepare('SHOW COLUMNS FROM products LIKE ?');
+    $stmt->execute([$column]);
+    $cache[$column] = (bool) $stmt->fetch();
+
+    return $cache[$column];
+}
+
 function normalizeBarcode(string $rawBarcode): string
 {
     $barcode = trim($rawBarcode);
@@ -132,15 +147,15 @@ function handleScan(PDO $pdo): void
         $stmt = $pdo->prepare('SELECT id FROM households WHERE id = ? LIMIT 1');
         $stmt->execute([$householdId]);
         if (!$stmt->fetch()) {
-            $stmt = $pdo->prepare('INSERT INTO households (id, name) VALUES (?, ?)');
-            $stmt->execute([$householdId, 'Default Household']);
+            response(404, ['error' => 'Household not found']);
+            return;
         }
 
         $stmt = $pdo->prepare('SELECT id FROM household_locations WHERE id = ? AND household_id = ? LIMIT 1');
         $stmt->execute([$locationId, $householdId]);
         if (!$stmt->fetch()) {
-            $stmt = $pdo->prepare('INSERT INTO household_locations (id, household_id, name) VALUES (?, ?, ?)');
-            $stmt->execute([$locationId, $householdId, 'Default Location']);
+            response(404, ['error' => 'Location not found for household']);
+            return;
         }
 
         $productLookupSource = 'existing';
@@ -160,8 +175,25 @@ function handleScan(PDO $pdo): void
             $productLookupSource = $offProduct ? 'openfoodfacts' : 'placeholder';
             $productNameUsed = $name;
 
-            $stmt = $pdo->prepare('INSERT INTO products (barcode, name, brand, image_url, nutrition_json) VALUES (?, ?, ?, ?, ?)');
-            $stmt->execute([$barcode, $name, $brand, $imageUrl, $nutritionJson]);
+            $hasSource = scanProductsHasColumn($pdo, 'nutrition_source');
+            $hasConfidence = scanProductsHasColumn($pdo, 'nutrition_confidence');
+            $hasUpdatedAt = scanProductsHasColumn($pdo, 'nutrition_updated_at');
+
+            if ($hasSource && $hasConfidence && $hasUpdatedAt) {
+                $source = $offProduct && $nutritionJson !== null ? 'off_label' : 'placeholder';
+                $confidence = $offProduct && $nutritionJson !== null ? 0.500 : null;
+                $nutritionUpdatedAt = $offProduct && $nutritionJson !== null ? date('Y-m-d H:i:s') : null;
+
+                $stmt = $pdo->prepare(
+                    'INSERT INTO products
+                     (barcode, name, brand, image_url, nutrition_json, nutrition_source, nutrition_confidence, nutrition_updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $stmt->execute([$barcode, $name, $brand, $imageUrl, $nutritionJson, $source, $confidence, $nutritionUpdatedAt]);
+            } else {
+                $stmt = $pdo->prepare('INSERT INTO products (barcode, name, brand, image_url, nutrition_json) VALUES (?, ?, ?, ?, ?)');
+                $stmt->execute([$barcode, $name, $brand, $imageUrl, $nutritionJson]);
+            }
             $productId = (int) $pdo->lastInsertId();
         } else {
             $productId = (int) $product['id'];
@@ -175,14 +207,42 @@ function handleScan(PDO $pdo): void
             if ($needsRefresh) {
                 $offProduct = fetchOpenFoodFactsProduct($barcode);
                 if ($offProduct) {
-                    $stmt = $pdo->prepare('UPDATE products SET name = ?, brand = ?, image_url = ?, nutrition_json = ? WHERE id = ?');
-                    $stmt->execute([
-                        $offProduct['name'],
-                        $offProduct['brand'] ?? null,
-                        $offProduct['image_url'] ?? null,
-                        json_encode($offProduct['nutrition_json'] ?? null, JSON_UNESCAPED_SLASHES),
-                        $productId,
-                    ]);
+                    $hasSource = scanProductsHasColumn($pdo, 'nutrition_source');
+                    $hasConfidence = scanProductsHasColumn($pdo, 'nutrition_confidence');
+                    $hasUpdatedAt = scanProductsHasColumn($pdo, 'nutrition_updated_at');
+
+                    if ($hasSource && $hasConfidence && $hasUpdatedAt) {
+                        $stmt = $pdo->prepare(
+                            'UPDATE products
+                             SET name = ?,
+                                 brand = ?,
+                                 image_url = ?,
+                                 nutrition_json = ?,
+                                 nutrition_source = ?,
+                                 nutrition_confidence = ?,
+                                 nutrition_updated_at = ?
+                             WHERE id = ?'
+                        );
+                        $stmt->execute([
+                            $offProduct['name'],
+                            $offProduct['brand'] ?? null,
+                            $offProduct['image_url'] ?? null,
+                            json_encode($offProduct['nutrition_json'] ?? null, JSON_UNESCAPED_SLASHES),
+                            'off_label',
+                            0.500,
+                            date('Y-m-d H:i:s'),
+                            $productId,
+                        ]);
+                    } else {
+                        $stmt = $pdo->prepare('UPDATE products SET name = ?, brand = ?, image_url = ?, nutrition_json = ? WHERE id = ?');
+                        $stmt->execute([
+                            $offProduct['name'],
+                            $offProduct['brand'] ?? null,
+                            $offProduct['image_url'] ?? null,
+                            json_encode($offProduct['nutrition_json'] ?? null, JSON_UNESCAPED_SLASHES),
+                            $productId,
+                        ]);
+                    }
                     $productLookupSource = 'openfoodfacts-refresh';
                     $productNameUsed = $offProduct['name'];
                 }
@@ -292,10 +352,35 @@ function handleScan(PDO $pdo): void
 
 function handleProductList(PDO $pdo): void
 {
-    $householdId = (int) ($_GET['household_id'] ?? 1);
-    $locationId = (int) ($_GET['location_id'] ?? 1);
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+    $locationId = isset($_GET['location_id']) ? (int) $_GET['location_id'] : null;
 
     try {
+        if ($locationId !== null && $locationId > 0) {
+            $stmt = $pdo->prepare('SELECT id FROM household_locations WHERE id = ? AND household_id = ? LIMIT 1');
+            $stmt->execute([$locationId, $householdId]);
+            if (!$stmt->fetch()) {
+                response(403, ['error' => 'Forbidden location']);
+                return;
+            }
+        }
+
+        $extraFields = '';
+        if (scanProductsHasColumn($pdo, 'nutrition_source')) {
+            $extraFields .= ', p.nutrition_source';
+        }
+        if (scanProductsHasColumn($pdo, 'nutrition_confidence')) {
+            $extraFields .= ', p.nutrition_confidence';
+        }
+        if (scanProductsHasColumn($pdo, 'frida_food_code')) {
+            $extraFields .= ', p.frida_food_code';
+        }
+        if (scanProductsHasColumn($pdo, 'nutrition_updated_at')) {
+            $extraFields .= ', p.nutrition_updated_at';
+        }
+
         $stmt = $pdo->prepare(
             'SELECT
                 p.id,
@@ -305,13 +390,15 @@ function handleProductList(PDO $pdo): void
                 p.image_url,
                 p.nutrition_json,
                 hi.quantity,
-                hi.minimum_quantity
-             FROM products p
-             LEFT JOIN household_inventory hi ON p.id = hi.product_id
-                AND hi.household_id = ? AND hi.location_id = ?
+                hi.minimum_quantity,
+                hi.location_id' . $extraFields . '
+             FROM household_inventory hi
+             INNER JOIN products p ON p.id = hi.product_id
+             WHERE hi.household_id = ?
+               AND (? IS NULL OR hi.location_id = ?)
              ORDER BY p.name ASC'
         );
-        $stmt->execute([$householdId, $locationId]);
+        $stmt->execute([$householdId, $locationId, $locationId]);
         $products = $stmt->fetchAll();
 
         response(200, [
@@ -328,7 +415,9 @@ function handleProductList(PDO $pdo): void
 
 function handleRecentScans(PDO $pdo): void
 {
-    $householdId = (int) ($_GET['household_id'] ?? 1);
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
     $limit = (int) ($_GET['limit'] ?? 20);
     if ($limit < 1 || $limit > 200) {
         $limit = 20;
@@ -356,6 +445,60 @@ function handleRecentScans(PDO $pdo): void
         response(200, [
             'status' => 'ok',
             'scans' => $rows,
+        ]);
+    } catch (Throwable $e) {
+        response(500, [
+            'error' => 'Database error',
+            'message' => $e->getMessage(),
+        ]);
+    }
+}
+
+function handleLocationList(PDO $pdo): void
+{
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT id, household_id, name, created_at
+             FROM household_locations
+             WHERE household_id = ?
+             ORDER BY name ASC, id ASC'
+        );
+        $stmt->execute([$householdId]);
+
+        response(200, [
+            'status' => 'ok',
+            'locations' => $stmt->fetchAll() ?: [],
+        ]);
+    } catch (Throwable $e) {
+        response(500, [
+            'error' => 'Database error',
+            'message' => $e->getMessage(),
+        ]);
+    }
+}
+
+function handleRecipeList(PDO $pdo): void
+{
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT id, owner_household_id, title, description, source_type, source_reference, is_shared, created_at, updated_at
+             FROM recipes
+             WHERE owner_household_id = ?
+             ORDER BY title ASC, id ASC'
+        );
+        $stmt->execute([$householdId]);
+
+        response(200, [
+            'status' => 'ok',
+            'recipes' => $stmt->fetchAll() ?: [],
         ]);
     } catch (Throwable $e) {
         response(500, [

@@ -20,12 +20,39 @@ HMI og backend prioriteres nu i denne raekkefoelge:
 3. Foedevarer med lokationer (fersk, frost, koeleskab, fryserum, kaelder)
 4. Scanning som hurtig inputkanal - ikke hovedoplevelsen
 
+Informationsarkitektur i HMI'et skal afspejle dette fra starten:
+
+- Primær navigation: Opskrifter, Lager, Madplan, Indkoeb, Opsaetning.
+- Aktiv husstand skal altid vaere tydelig i UI og API-kald.
+- Scanlog er sekundær driftsinformation og maa ikke dominere hovedoplevelsen.
+
 ## Teknologistak (forelobig)
 
 - Backend: PHP
 - Database: MySQL
 - Hardware-integration: ESP32 scanning ind/ud (sekundaer input)
 - API-integrationer: Open Food Facts, Frida (naeringsdata), InMobile SMS
+
+### AI (eksperimentel)
+
+- Backend kan nu kalde Anthropic via endpointet `ai.meal_ideas`.
+- Forslagene laves paa baggrund af den aktive husstands egne varer (og opskrifter hvis de findes).
+- AI er slukket som standard og aktiveres via `.env`.
+
+Miljoevariabler:
+
+- `AI_ENABLED=true`
+- `ANTHROPIC_API_KEY=...`
+- `ANTHROPIC_MODEL=claude-3-5-haiku-latest`
+- `ANTHROPIC_API_URL=https://api.anthropic.com/v1/messages`
+- `ANTHROPIC_MAX_TOKENS=900`
+- `ANTHROPIC_TEMPERATURE=0.5`
+
+Naeringsstrategi:
+
+- Open Food Facts bruges til hurtig stregkodeberigelse og billeder.
+- Frida/DTU skal taenkes ind som naeste datalag til mere stabile danske naeringsdata og senere opskriftsberegninger.
+- Datamodellen skal kunne rumme flere kilder pr. vare, saa OFF og Frida/DTU kan sameksistere med tydelig prioritet og fallback.
 
 ## Kernefunktioner
 
@@ -43,6 +70,11 @@ HMI og backend prioriteres nu i denne raekkefoelge:
 - Flere lokationer pr. husstand (fx koekken, kaelder, fryserum).
 - Husstande kan ikke se hinandens lagerantal.
 - Deling af varekatalog mellem husstande er muligt.
+- Opskrifter kan deles mellem husstande, selv om lager, maengder og lokationer er private pr. husstand.
+- HMI, API og fremtidige integrationer skal tage `household_id` som et foerste-klasses felt - ikke som en senere udvidelse.
+- Husstande er bruger-styrede via admin-oprettelse: en bruger maa kun kunne se de husstande, vedkommende er tildelt.
+- Brugere maa ikke kunne browse eller skifte til andre husstande uden et eksplicit medlemskab i `household_users`.
+- Platform-admin opretter husstande, brugere og medlemskaber mellem dem.
 
 ### Opskrifter
 
@@ -106,8 +138,60 @@ HMI og backend prioriteres nu i denne raekkefoelge:
 
 1. Laas MVP scope endeligt.
 2. Beskriv datamodel (husstand, lokation, vare, lagerbevaegelse, opskrift, indkoebspost).
-3. Definer API-kontrakter til scanning, lager og indkoebsseddel.
-4. Vaelg scraping-strategi og compliance-ramme pr. butik.
+3. Definer API-kontrakter til scanning, lager, indkoebsseddel og husstandsskift i HMI.
+4. Beskriv hvordan Open Food Facts og Frida/DTU spiller sammen i varekort og opskriftsberegninger.
+5. Vaelg scraping-strategi og compliance-ramme pr. butik.
+
+## API hurtig adgang
+
+API indgangen er:
+
+- [public/api.php](public/api.php)
+
+Lokalt (naar server koerer paa 127.0.0.1:8081):
+
+- http://127.0.0.1:8081/api.php
+
+Den URL returnerer en status JSON med alle endpoints.
+
+Hurtig login/test flow med curl:
+
+1. Request kode
+
+```bash
+curl -s -X POST \
+	-H 'Content-Type: application/json' \
+	-d '{"initials":"CT"}' \
+	'http://127.0.0.1:8081/api.php?endpoint=auth.request_code'
+```
+
+2. Verificer kode og faa access token
+
+```bash
+curl -s -X POST \
+	-H 'Content-Type: application/json' \
+	-d '{"challenge_id":"...","code":"123456"}' \
+	'http://127.0.0.1:8081/api.php?endpoint=auth.verify_code'
+```
+
+3. Brug token mod husstandsdata
+
+```bash
+TOKEN='indsat_token_her'
+curl -s -H "Authorization: Bearer $TOKEN" \
+	'http://127.0.0.1:8081/api.php?endpoint=products&household_id=1'
+```
+
+4. AI forslag (naar AI er aktiveret i .env)
+
+```bash
+TOKEN='indsat_token_her'
+curl -s -X POST \
+	-H 'Content-Type: application/json' \
+	-H "Authorization: Bearer $TOKEN" \
+	-d '{"household_id":1}' \
+	'http://127.0.0.1:8081/api.php?endpoint=ai.meal_ideas'
+```
 
 ## Hurtig opstart (webd.pl)
 

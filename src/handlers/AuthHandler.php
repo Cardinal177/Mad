@@ -26,6 +26,121 @@ function getBearerToken(): ?string
     return trim(substr($auth, 7));
 }
 
+function usersHasPlatformAdminColumn(PDO $pdo): bool
+{
+    static $hasColumn = null;
+
+    if ($hasColumn !== null) {
+        return $hasColumn;
+    }
+
+    $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'is_platform_admin'");
+    $hasColumn = (bool) $stmt->fetch();
+
+    return $hasColumn;
+}
+
+function getAuthenticatedSession(PDO $pdo): ?array
+{
+    $token = getBearerToken();
+    if (!$token) {
+        return null;
+    }
+
+    $tokenHash = hash('sha256', $token);
+
+    $platformAdminSelect = usersHasPlatformAdminColumn($pdo)
+        ? 'COALESCE(u.is_platform_admin, 0) AS is_platform_admin'
+        : '0 AS is_platform_admin';
+
+    $stmt = $pdo->prepare(
+        'SELECT s.id AS session_id, s.user_id, s.expires_at, s.revoked_at,
+                u.initials, u.full_name, u.phone_e164,
+                ' . $platformAdminSelect . '
+         FROM auth_sessions s
+         INNER JOIN users u ON u.id = s.user_id
+         WHERE s.token_hash = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$tokenHash]);
+    $session = $stmt->fetch();
+
+    if (!$session) {
+        return null;
+    }
+
+    if ($session['revoked_at'] !== null) {
+        return null;
+    }
+
+    if (strtotime((string) $session['expires_at']) < time()) {
+        return null;
+    }
+
+    return $session;
+}
+
+function requireAuthenticatedSession(PDO $pdo): array
+{
+    $session = getAuthenticatedSession($pdo);
+    if (!$session) {
+        response(401, ['error' => 'Unauthorized']);
+        exit;
+    }
+
+    $stmt = $pdo->prepare('UPDATE auth_sessions SET last_seen_at = NOW() WHERE id = ?');
+    $stmt->execute([(int) $session['session_id']]);
+
+    return $session;
+}
+
+function getUserHouseholdMemberships(PDO $pdo, int $userId): array
+{
+    $stmt = $pdo->prepare(
+        'SELECT h.id, h.name, hu.role
+         FROM household_users hu
+         INNER JOIN households h ON h.id = hu.household_id
+         WHERE hu.user_id = ?
+         ORDER BY h.name ASC, h.id ASC'
+    );
+    $stmt->execute([$userId]);
+
+    return $stmt->fetchAll() ?: [];
+}
+
+function resolveAccessibleHouseholdId(PDO $pdo, array $session, ?int $requestedHouseholdId = null): int
+{
+    $memberships = getUserHouseholdMemberships($pdo, (int) $session['user_id']);
+    $allowedIds = array_map(static fn(array $membership): int => (int) $membership['id'], $memberships);
+
+    if ($requestedHouseholdId !== null && $requestedHouseholdId > 0) {
+        if (in_array($requestedHouseholdId, $allowedIds, true)) {
+            return $requestedHouseholdId;
+        }
+
+        response(403, ['error' => 'Forbidden household']);
+        exit;
+    }
+
+    if ($allowedIds === []) {
+        response(403, ['error' => 'No household access']);
+        exit;
+    }
+
+    return $allowedIds[0];
+}
+
+function requirePlatformAdmin(PDO $pdo): array
+{
+    $session = requireAuthenticatedSession($pdo);
+    if ((int) ($session['is_platform_admin'] ?? 0) !== 1) {
+        response(403, ['error' => 'Platform admin access required']);
+        exit;
+    }
+
+    return $session;
+}
+
 function requireValidDeviceToken(): bool
 {
     $expectedDeviceToken = (string) (env_value('DEVICE_TOKEN', '') ?? '');
@@ -118,10 +233,6 @@ function sendSmsViaInmobile(string $toPhoneE164, string $message): array
 
 function handleAuthRequestCode(PDO $pdo): void
 {
-    if (!requireValidDeviceToken()) {
-        return;
-    }
-
     $data = parseJsonInput();
     $initials = strtoupper(trim((string) ($data['initials'] ?? '')));
 
@@ -196,10 +307,6 @@ function handleAuthRequestCode(PDO $pdo): void
 
 function handleAuthVerifyCode(PDO $pdo): void
 {
-    if (!requireValidDeviceToken()) {
-        return;
-    }
-
     $data = parseJsonInput();
     $challengeId = trim((string) ($data['challenge_id'] ?? ''));
     $code = trim((string) ($data['code'] ?? ''));
@@ -267,6 +374,8 @@ function handleAuthVerifyCode(PDO $pdo): void
     $stmt->execute([(int) $challenge['user_id'], $tokenHash, $expiresAt]);
     $pdo->commit();
 
+    $memberships = getUserHouseholdMemberships($pdo, (int) $challenge['user_id']);
+
     response(200, [
         'status' => 'ok',
         'access_token' => $token,
@@ -277,47 +386,21 @@ function handleAuthVerifyCode(PDO $pdo): void
             'initials' => (string) $challenge['initials'],
             'full_name' => (string) $challenge['full_name'],
         ],
+        'households' => array_map(static function (array $membership): array {
+            return [
+                'id' => (int) $membership['id'],
+                'name' => (string) $membership['name'],
+                'role' => (string) $membership['role'],
+            ];
+        }, $memberships),
+        'active_household_id' => $memberships !== [] ? (int) $memberships[0]['id'] : null,
     ]);
 }
 
 function handleAuthMe(PDO $pdo): void
 {
-    $token = getBearerToken();
-    if (!$token) {
-        response(401, ['error' => 'Missing bearer token']);
-        return;
-    }
-
-    $tokenHash = hash('sha256', $token);
-
-    $stmt = $pdo->prepare(
-        'SELECT s.id AS session_id, s.user_id, s.expires_at, s.revoked_at,
-                u.initials, u.full_name, u.phone_e164
-         FROM auth_sessions s
-         INNER JOIN users u ON u.id = s.user_id
-         WHERE s.token_hash = ?
-         LIMIT 1'
-    );
-    $stmt->execute([$tokenHash]);
-    $session = $stmt->fetch();
-
-    if (!$session) {
-        response(401, ['error' => 'Invalid token']);
-        return;
-    }
-
-    if ($session['revoked_at'] !== null) {
-        response(401, ['error' => 'Session revoked']);
-        return;
-    }
-
-    if (strtotime((string) $session['expires_at']) < time()) {
-        response(401, ['error' => 'Session expired']);
-        return;
-    }
-
-    $stmt = $pdo->prepare('UPDATE auth_sessions SET last_seen_at = NOW() WHERE id = ?');
-    $stmt->execute([(int) $session['session_id']]);
+    $session = requireAuthenticatedSession($pdo);
+    $memberships = getUserHouseholdMemberships($pdo, (int) $session['user_id']);
 
     response(200, [
         'status' => 'ok',
@@ -326,7 +409,16 @@ function handleAuthMe(PDO $pdo): void
             'initials' => (string) $session['initials'],
             'full_name' => (string) $session['full_name'],
             'phone_e164' => (string) $session['phone_e164'],
+            'is_platform_admin' => (int) ($session['is_platform_admin'] ?? 0) === 1,
         ],
+        'households' => array_map(static function (array $membership): array {
+            return [
+                'id' => (int) $membership['id'],
+                'name' => (string) $membership['name'],
+                'role' => (string) $membership['role'],
+            ];
+        }, $memberships),
+        'active_household_id' => $memberships !== [] ? (int) $memberships[0]['id'] : null,
         'session_expires_at' => (string) $session['expires_at'],
     ]);
 }
