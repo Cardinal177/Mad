@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.4] - 2026-05-06 18:33
+
+### Changed
+- Auto-enrich new barcode scans with Open Food Facts product names
+
+
 ## [0.2.3] - 2026-05-06 18:26
 
 ### Changed
