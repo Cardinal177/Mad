@@ -188,3 +188,43 @@ CREATE TABLE IF NOT EXISTS store_offers (
     ON DELETE SET NULL,
   INDEX idx_offers_store_dates (store_name, valid_from, valid_to)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS auth_otp_challenges (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  challenge_id VARCHAR(64) NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  purpose ENUM('login') NOT NULL DEFAULT 'login',
+  code_hash VARCHAR(255) NOT NULL,
+  attempts INT UNSIGNED NOT NULL DEFAULT 0,
+  max_attempts INT UNSIGNED NOT NULL DEFAULT 5,
+  requested_ip VARCHAR(45) DEFAULT NULL,
+  user_agent VARCHAR(255) DEFAULT NULL,
+  sent_via ENUM('sms') NOT NULL DEFAULT 'sms',
+  sent_ok TINYINT(1) NOT NULL DEFAULT 0,
+  provider_ref VARCHAR(120) DEFAULT NULL,
+  expires_at DATETIME NOT NULL,
+  consumed_at DATETIME DEFAULT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_auth_challenge_id (challenge_id),
+  INDEX idx_auth_challenge_user_created (user_id, created_at),
+  INDEX idx_auth_challenge_expires (expires_at),
+  CONSTRAINT fk_auth_challenge_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  token_hash CHAR(64) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_seen_at DATETIME DEFAULT NULL,
+  expires_at DATETIME NOT NULL,
+  revoked_at DATETIME DEFAULT NULL,
+  UNIQUE KEY uq_auth_sessions_token_hash (token_hash),
+  INDEX idx_auth_sessions_user (user_id),
+  INDEX idx_auth_sessions_expires (expires_at),
+  CONSTRAINT fk_auth_sessions_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -11,6 +11,7 @@ require_once $baseDir . '/src/bootstrap.php';
 require_once $baseDir . '/config/database.php';
 require_once $baseDir . '/src/api/Router.php';
 require_once $baseDir . '/src/handlers/ScanHandler.php';
+require_once $baseDir . '/src/handlers/AuthHandler.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -31,6 +32,21 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'recent') {
         handleRecentScans($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'auth.request_code') {
+        handleAuthRequestCode($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'auth.verify_code') {
+        handleAuthVerifyCode($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'auth.me') {
+        handleAuthMe($pdo);
         exit;
     }
 
@@ -61,6 +77,9 @@ try {
             '/api.php?endpoint=scan' => 'POST scan ingest endpoint',
             '/api.php?endpoint=products' => 'Current inventory product list',
             '/api.php?endpoint=recent' => 'Recent inventory scan movements',
+            '/api.php?endpoint=auth.request_code' => 'POST request 2FA code by initials',
+            '/api.php?endpoint=auth.verify_code' => 'POST verify 2FA code and issue access token',
+            '/api.php?endpoint=auth.me' => 'GET current user from bearer token',
             '/' => 'Live test dashboard',
         ],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
