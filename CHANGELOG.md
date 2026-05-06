@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.5] - 2026-05-06 17:18
+
+### Changed
+- Add temporary live test view (live.php) with recent scans and inventory data endpoints
+
+
 ## [0.1.4] - 2026-05-06 17:11
 
 ### Changed
