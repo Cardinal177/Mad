@@ -253,7 +253,7 @@ void sendToAPI(String barcode) {
     if (!isConnected) return;
     
     HTTPClient http;
-    String url = String(apiHost) + "/index.php?endpoint=scan";
+    String url = String(apiHost) + "/api.php?endpoint=scan";
     
     http.begin(url);
     http.addHeader("Host", apiHostHeader);

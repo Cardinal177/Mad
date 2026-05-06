@@ -2,32 +2,68 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__) . '/src/bootstrap.php';
-require_once dirname(__DIR__) . '/config/database.php';
-require_once dirname(__DIR__) . '/src/api/Router.php';
-require_once dirname(__DIR__) . '/src/handlers/ScanHandler.php';
+$baseDir = dirname(__DIR__);
+if (!is_dir($baseDir . '/src') && is_dir(__DIR__ . '/src')) {
+    $baseDir = __DIR__;
+}
+
+require_once $baseDir . '/src/bootstrap.php';
+require_once $baseDir . '/config/database.php';
+require_once $baseDir . '/src/api/Router.php';
+require_once $baseDir . '/src/handlers/ScanHandler.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
 try {
     $pdo = db();
-    $router = new ApiRouter();
 
-    // Register routes
-    $router->post('/api/scan', fn() => handleScan($pdo));
-    $router->get('/api/products', fn() => handleProductList($pdo));
+    $endpoint = (string) ($_GET['endpoint'] ?? '');
 
-    // Dispatch
-    $method = $_SERVER['REQUEST_METHOD'];
-    $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-
-    // Remove /api.php prefix if present
-    $path = str_replace('/api.php', '', $path);
-    if ($path === '') {
-        $path = '/';
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'scan') {
+        handleScan($pdo);
+        exit;
     }
 
-    $router->dispatch($method, $path);
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'products') {
+        handleProductList($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'recent') {
+        handleRecentScans($pdo);
+        exit;
+    }
+
+    $result = $pdo->query('SELECT NOW() AS server_time')->fetch();
+    $tables = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
+
+    $writeTest = null;
+    if (($_GET['test'] ?? null) === 'write') {
+        $stmt = $pdo->prepare('INSERT INTO households (name) VALUES (?)');
+        $stmt->execute(['API Test ' . date('Y-m-d H:i:s')]);
+        $id = $pdo->lastInsertId();
+
+        $stmt = $pdo->prepare('SELECT id, name FROM households WHERE id = ? LIMIT 1');
+        $stmt->execute([$id]);
+        $writeTest = $stmt->fetch();
+    }
+
+    echo json_encode([
+        'status' => 'ok',
+        'message' => 'Mad API is running (database fully operational)',
+        'db_server_time' => $result['server_time'],
+        'tables' => $tables,
+        'tables_count' => count($tables),
+        'test_write' => $writeTest,
+        'endpoints' => [
+            '/api.php' => 'This status page',
+            '/api.php?test=write' => 'Test database write',
+            '/api.php?endpoint=scan' => 'POST scan ingest endpoint',
+            '/api.php?endpoint=products' => 'Current inventory product list',
+            '/api.php?endpoint=recent' => 'Recent inventory scan movements',
+            '/' => 'Live test dashboard',
+        ],
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
 } catch (Throwable $e) {
     http_response_code(500);

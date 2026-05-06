@@ -59,6 +59,8 @@ mirror -R \
   "$PROJECT_DIR/config" "$FTP_PATH/config"
 
 put "$PROJECT_DIR/public/index.php" -o "$FTP_PATH/index.php"
+put "$PROJECT_DIR/public/api.php" -o "$FTP_PATH/api.php"
+put "$PROJECT_DIR/public/live.php" -o "$FTP_PATH/live.php"
 
 mirror -R \
   --verbose=2 \

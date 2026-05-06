@@ -147,8 +147,8 @@ function esc(v) {
 async function refresh() {
     try {
         const [recent, products] = await Promise.all([
-            loadJson('index.php?endpoint=recent&limit=25'),
-            loadJson('index.php?endpoint=products')
+            loadJson('api.php?endpoint=recent&limit=25'),
+            loadJson('api.php?endpoint=products')
         ]);
 
         const scans = recent.scans || [];
