@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.3] - 2026-05-06 17:11
+
+### Changed
+- Add IN/OUT scan mode toggle on GPIO4 button and send correct movement_type in ESP32 payload
+
+
 ## [0.1.2] - 2026-05-06 17:06
 
 ### Changed
