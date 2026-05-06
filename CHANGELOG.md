@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.8] - 2026-05-06 18:58
+
+### Changed
+- Backfill old products from Open Food Facts and clean repeated legacy barcode entries
+
+
 ## [0.2.7] - 2026-05-06 18:53
 
 ### Changed
