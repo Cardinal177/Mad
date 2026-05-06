@@ -142,3 +142,22 @@ Upload projektet til webhotellets webroot (fx `public_html/mad`) og kald:
 - [public/index.php](public/index.php)
 
 Ved succes returneres JSON med `status: ok` og database servertid.
+
+## Release-rytme
+
+Projektet bruger nu en fast versionsrytme:
+
+1. Opdater version + changelog via script.
+2. Commit + tag oprettes automatisk.
+3. Push til GitHub (`main` + tag).
+
+Kommando:
+
+```bash
+./scripts/release.sh 0.1.1 "Kort beskrivelse af aendringer"
+```
+
+Filer der altid opdateres ved release:
+
+- [VERSION](VERSION)
+- [CHANGELOG.md](CHANGELOG.md)
