@@ -82,6 +82,10 @@ Det er vigtigt, fordi virtual host ellers kan svare 404.
 
 Firmware sender ogsaa `X-Device-Token` header. Backend afviser scanninger uden korrekt token.
 
+Der er deduplikering paa baade klient og server:
+- ESP32 ignorerer samme barcode + mode i 6 sekunder.
+- Backend ignorerer identiske scan-events i 6 sekunder.
+
 ## API Endpoint
 
 The sketch sends scanned barcodes to:

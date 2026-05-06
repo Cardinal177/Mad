@@ -37,7 +37,7 @@ uint32_t lastButtonDebounceAt = 0;
 String lastSubmittedBarcode = "";
 String lastSubmittedMode = "";
 uint32_t lastSubmittedAt = 0;
-const uint32_t duplicateWindowMs = 2500;
+const uint32_t duplicateWindowMs = 6000;
 
 enum ScanMode {
     MODE_IN,

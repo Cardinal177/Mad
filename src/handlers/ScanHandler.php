@@ -69,7 +69,7 @@ function handleScan(PDO $pdo): void
         // Record inventory movement
         $quantityDelta = ($movementType === 'out') ? -$quantity : $quantity;
 
-        // Server-side dedupe: ignore same scan repeated within 3 seconds.
+                // Server-side dedupe: ignore same scan repeated within 6 seconds.
         $stmt = $pdo->prepare(
             'SELECT id
              FROM inventory_movements
@@ -79,7 +79,7 @@ function handleScan(PDO $pdo): void
                AND movement_type = ?
                AND source = ?
                AND ABS(quantity_delta - ?) < 0.0001
-               AND created_at >= (NOW() - INTERVAL 3 SECOND)
+                             AND created_at >= (NOW() - INTERVAL 6 SECOND)
              ORDER BY id DESC
              LIMIT 1'
         );
