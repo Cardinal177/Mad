@@ -18,10 +18,21 @@ header('Content-Type: application/json; charset=utf-8');
 
 try {
     $pdo = db();
+    $endpoint = (string) ($_GET['endpoint'] ?? '');
 
     // Primary ingestion endpoint for ESP32 scanner.
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && (($_GET['endpoint'] ?? '') === 'scan')) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'scan') {
         handleScan($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'products') {
+        handleProductList($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'recent') {
+        handleRecentScans($pdo);
         exit;
     }
 
@@ -52,6 +63,9 @@ try {
         'endpoints' => [
             '/' => 'This status page',
             '/?test=write' => 'Test database write',
+            '/?endpoint=products' => 'Current inventory product list',
+            '/?endpoint=recent' => 'Recent inventory scan movements',
+            '/live.php' => 'Simple live test dashboard',
         ],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {

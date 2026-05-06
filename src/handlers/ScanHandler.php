@@ -153,3 +153,42 @@ function handleProductList(PDO $pdo): void
         ]);
     }
 }
+
+function handleRecentScans(PDO $pdo): void
+{
+    $householdId = (int) ($_GET['household_id'] ?? 1);
+    $limit = (int) ($_GET['limit'] ?? 20);
+    if ($limit < 1 || $limit > 200) {
+        $limit = 20;
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT
+                im.id,
+                im.created_at,
+                im.movement_type,
+                im.quantity_delta,
+                im.location_id,
+                p.barcode,
+                p.name AS product_name
+             FROM inventory_movements im
+             INNER JOIN products p ON p.id = im.product_id
+             WHERE im.household_id = ?
+             ORDER BY im.created_at DESC
+             LIMIT ' . $limit
+        );
+        $stmt->execute([$householdId]);
+        $rows = $stmt->fetchAll();
+
+        response(200, [
+            'status' => 'ok',
+            'scans' => $rows,
+        ]);
+    } catch (Throwable $e) {
+        response(500, [
+            'error' => 'Database error',
+            'message' => $e->getMessage(),
+        ]);
+    }
+}
