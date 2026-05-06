@@ -50,6 +50,11 @@ try {
         exit;
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'auth.test_sms') {
+        handleAuthTestSms($pdo);
+        exit;
+    }
+
     $result = $pdo->query('SELECT NOW() AS server_time')->fetch();
     $tables = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
 
@@ -80,6 +85,7 @@ try {
             '/api.php?endpoint=auth.request_code' => 'POST request 2FA code by initials',
             '/api.php?endpoint=auth.verify_code' => 'POST verify 2FA code and issue access token',
             '/api.php?endpoint=auth.me' => 'GET current user from bearer token',
+            '/api.php?endpoint=auth.test_sms' => 'POST send one test SMS by initials or phone number',
             '/' => 'Live test dashboard',
         ],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

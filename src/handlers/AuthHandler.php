@@ -331,3 +331,61 @@ function handleAuthMe(PDO $pdo): void
         'session_expires_at' => (string) $session['expires_at'],
     ]);
 }
+
+function handleAuthTestSms(PDO $pdo): void
+{
+    if (!requireValidDeviceToken()) {
+        return;
+    }
+
+    $data = parseJsonInput();
+    $initials = strtoupper(trim((string) ($data['initials'] ?? '')));
+    $phone = trim((string) ($data['phone_e164'] ?? ''));
+    $message = trim((string) ($data['message'] ?? ''));
+
+    if ($message === '') {
+        $message = 'Mad test SMS sendt ' . date('Y-m-d H:i:s');
+    }
+
+    if ($phone === '' && $initials === '') {
+        response(400, ['error' => 'Provide initials or phone_e164']);
+        return;
+    }
+
+    if ($phone === '' && $initials !== '') {
+        $stmt = $pdo->prepare(
+            'SELECT phone_e164, full_name
+             FROM users
+             WHERE initials = ? AND is_active = 1
+             ORDER BY id ASC
+             LIMIT 1'
+        );
+        $stmt->execute([$initials]);
+        $user = $stmt->fetch();
+
+        if (!$user) {
+            response(404, ['error' => 'User not found']);
+            return;
+        }
+
+        $phone = (string) $user['phone_e164'];
+    }
+
+    $sms = sendSmsViaInmobile($phone, $message);
+    if (!$sms['ok']) {
+        response(502, [
+            'error' => 'SMS send failed',
+            'details' => $sms['error'] ?? 'Unknown error',
+            'raw' => $sms['raw'] ?? null,
+        ]);
+        return;
+    }
+
+    response(200, [
+        'status' => 'ok',
+        'sms_sent' => true,
+        'provider_ref' => $sms['provider_ref'] ?? null,
+        'recipient' => $phone,
+        'message' => $message,
+    ]);
+}
