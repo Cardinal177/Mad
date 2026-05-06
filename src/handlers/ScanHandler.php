@@ -68,6 +68,21 @@ function placeholderProductName(string $barcode): string
     return 'Scanned Product ' . substr($barcode, 0, 8);
 }
 
+function normalizeBarcode(string $rawBarcode): string
+{
+    $barcode = trim($rawBarcode);
+    if ($barcode === '') {
+        return '';
+    }
+
+    // Collapse scanner glitches like 5741000124024 repeated multiple times in one payload.
+    if (preg_match('/^(\d{8,14})\1+$/', $barcode, $matches) === 1) {
+        return $matches[1];
+    }
+
+    return $barcode;
+}
+
 function handleScan(PDO $pdo): void
 {
     $expectedDeviceToken = (string) (env_value('DEVICE_TOKEN', '') ?? '');
@@ -84,7 +99,12 @@ function handleScan(PDO $pdo): void
         return;
     }
 
-    $barcode = trim((string) $data['barcode']);
+    $rawBarcode = (string) $data['barcode'];
+    $barcode = normalizeBarcode($rawBarcode);
+    if ($barcode === '') {
+        response(400, ['error' => 'Missing barcode']);
+        return;
+    }
     $householdId = (int) ($data['household_id'] ?? 1);
     $locationId = (int) ($data['location_id'] ?? 1);
     $movementType = (string) ($data['movement_type'] ?? 'in');
@@ -115,7 +135,7 @@ function handleScan(PDO $pdo): void
         $productLookupSource = 'existing';
         $productNameUsed = null;
 
-        $stmt = $pdo->prepare('SELECT id FROM products WHERE barcode = ? LIMIT 1');
+        $stmt = $pdo->prepare('SELECT id, name FROM products WHERE barcode = ? LIMIT 1');
         $stmt->execute([$barcode]);
         $product = $stmt->fetch();
 
@@ -133,6 +153,22 @@ function handleScan(PDO $pdo): void
             $productId = (int) $pdo->lastInsertId();
         } else {
             $productId = (int) $product['id'];
+
+            $currentName = (string) ($product['name'] ?? '');
+            if (str_starts_with($currentName, 'Scanned Product ')) {
+                $offProduct = fetchOpenFoodFactsProduct($barcode);
+                if ($offProduct) {
+                    $stmt = $pdo->prepare('UPDATE products SET name = ?, brand = ?, image_url = ? WHERE id = ?');
+                    $stmt->execute([
+                        $offProduct['name'],
+                        $offProduct['brand'] ?? null,
+                        $offProduct['image_url'] ?? null,
+                        $productId,
+                    ]);
+                    $productLookupSource = 'openfoodfacts-refresh';
+                    $productNameUsed = $offProduct['name'];
+                }
+            }
         }
 
         $quantityDelta = ($movementType === 'out') ? -$quantity : $quantity;
@@ -167,6 +203,7 @@ function handleScan(PDO $pdo): void
                 'status' => 'ok',
                 'message' => 'Duplicate scan ignored',
                 'barcode' => $barcode,
+                'barcode_raw' => $rawBarcode,
                 'product_id' => $productId,
                 'product_lookup_source' => $productLookupSource,
                 'product_name' => $productNameUsed,
@@ -217,6 +254,7 @@ function handleScan(PDO $pdo): void
             'status' => 'ok',
             'message' => 'Scan recorded',
             'barcode' => $barcode,
+            'barcode_raw' => $rawBarcode,
             'product_id' => $productId,
             'product_lookup_source' => $productLookupSource,
             'product_name' => $productNameUsed,

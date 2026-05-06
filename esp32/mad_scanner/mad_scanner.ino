@@ -39,6 +39,44 @@ String lastSubmittedMode = "";
 uint32_t lastSubmittedAt = 0;
 const uint32_t duplicateWindowMs = 6000;
 
+String normalizeBarcode(String barcode) {
+    barcode.trim();
+    if (barcode.length() == 0) {
+        return "";
+    }
+
+    bool allDigits = true;
+    for (int i = 0; i < barcode.length(); i++) {
+        if (!isDigit(barcode[i])) {
+            allDigits = false;
+            break;
+        }
+    }
+
+    if (!allDigits) {
+        return barcode;
+    }
+
+    // Collapse repeated numeric payloads like EANx2/EANx3.
+    for (int unitLen = 8; unitLen <= 14; unitLen++) {
+        if (barcode.length() > unitLen && (barcode.length() % unitLen) == 0) {
+            String unit = barcode.substring(0, unitLen);
+            bool repeats = true;
+            for (int pos = unitLen; pos < barcode.length(); pos += unitLen) {
+                if (barcode.substring(pos, pos + unitLen) != unit) {
+                    repeats = false;
+                    break;
+                }
+            }
+            if (repeats) {
+                return unit;
+            }
+        }
+    }
+
+    return barcode;
+}
+
 enum ScanMode {
     MODE_IN,
     MODE_OUT
@@ -110,7 +148,7 @@ void loop() {
     // Read from barcode scanner
     if (Serial2.available()) {
         String scanned = Serial2.readStringUntil('\n');
-        scanned.trim();
+        scanned = normalizeBarcode(scanned);
         
         if (scanned.length() > 0) {
             lastScannedBarcode = scanned;
