@@ -11,21 +11,31 @@ Gøre det nemt at holde styr på madvarer i hjemmet, minimere madspild og gøre 
 - automatiske indkøbslister
 - aktuelle tilbud fra udvalgte butikker
 
+## Produktretning (opdateret)
+
+HMI og backend prioriteres nu i denne raekkefoelge:
+
+1. Madplaner (ugeflow, hvad skal vi spise, hvad mangler vi)
+2. Opskrifter (med ingredienser, lokation og lagerkobling)
+3. Foedevarer med lokationer (fersk, frost, koeleskab, fryserum, kaelder)
+4. Scanning som hurtig inputkanal - ikke hovedoplevelsen
+
 ## Teknologistak (forelobig)
 
 - Backend: PHP
 - Database: MySQL
-- Hardware-integration: ESP32 scanning ind/ud
-- API-integrationer: fødevaredatabase, opskriftsdatabaser, Twilio SMS, SMTP email
+- Hardware-integration: ESP32 scanning ind/ud (sekundaer input)
+- API-integrationer: Open Food Facts, Frida (naeringsdata), InMobile SMS
 
 ## Kernefunktioner
 
 ### Lagerstyring
 
-- Scanning ind/ud via ESP32.
+- Scanning ind/ud via ESP32 som hurtig registrering.
 - Varedata: navn, maerke, vaegt, billede, stregkode, ernaeringsoplysninger.
 - Minimumsbeholdning pr. vare med automatisk oprettelse pa indkoebsseddel.
-- QR label print og one-click flow: `Scan -> Ind -> QR`.
+- Lokationstyper: fersk, frost, koekken, kaelder, fryserum.
+- QR label print og one-click flow: `Scan -> Ind -> QR` (senere fase).
 
 ### Husstande og adgang
 
@@ -39,6 +49,7 @@ Gøre det nemt at holde styr på madvarer i hjemmet, minimere madspild og gøre 
 - Opskriftssamling med kobling til indkoebsfunktion.
 - Upload af PDF-opskrifter.
 - Husstande kan vaelge at dele opskrifter med andre husstande.
+- Maaltidsplanlaegning koblet direkte til lager og lokationer.
 
 ### Indkoebsseddel
 
@@ -72,9 +83,10 @@ Gøre det nemt at holde styr på madvarer i hjemmet, minimere madspild og gøre 
 
 1. Opret husstand og brugere.
 2. Login med initialer + SMS 2FA.
-3. Basis lagerstyring (opret vare, scan ind/ud, minimumsbeholdning).
-4. Automatisk indkoebsseddel uden tilbudsintegration.
-5. Enkel opskriftssamling med manuel kobling til indkoeb.
+3. Opskrifter + madplan (ugevisning) som primaer funktion.
+4. Basis lagerstyring med lokationer (fersk/frost) og minimumsbeholdning.
+5. Scanning som hurtig opdatering af lager, ikke krav for at bruge systemet.
+6. Automatisk indkoebsseddel uden tilbudsintegration.
 
 ## Fase 2
 

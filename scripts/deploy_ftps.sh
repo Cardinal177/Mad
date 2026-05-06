@@ -31,12 +31,7 @@ if [[ "${FTP_DELETE_REMOTE:-false}" == "true" ]]; then
 fi
 
 UPLOAD_ENV_FILE="${FTP_UPLOAD_ENV:-false}"
-SERVER_ENV_FILE="$PROJECT_DIR/.env.server"
-
-if [[ "$UPLOAD_ENV_FILE" == "true" && ! -f "$SERVER_ENV_FILE" ]]; then
-  echo "FTP_UPLOAD_ENV=true, but $SERVER_ENV_FILE was not found"
-  exit 1
-fi
+SERVER_ENV_FILE="$ENV_FILE"
 
 lftp -u "$FTP_USER","$FTP_PASS" -p "$FTP_PORT" "$FTP_HOST" <<EOF
 set ftp:ssl-force true
