@@ -71,8 +71,12 @@ const char* password = "YOUR_PASSWORD";
 
 Update API endpoint if needed:
 ```cpp
-const char* apiHost = "http://mad.cardinal.webd.pro";
+const char* apiHostIp = "194.181.228.25";
+const char* apiHostHeader = "mad.cardinal.webd.pro";
 ```
+
+Firmware sender HTTP til serverens IP men med korrekt `Host` header.
+Det er vigtigt, fordi virtual host ellers kan svare 404.
 
 ## API Endpoint
 

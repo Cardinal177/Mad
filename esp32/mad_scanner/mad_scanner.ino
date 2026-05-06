@@ -2,7 +2,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <WiFi.h>
-#include <HTTPClient.h>
+#include <WiFiClient.h>
 
 // OLED Display setup
 #define SCREEN_WIDTH 128
@@ -20,8 +20,10 @@ const char* ssid = "UniFi";
 const char* password = "Tommeltot2020";
 
 // API settings
-const char* apiHost = "http://194.181.228.25";
+const char* apiHostIp = "194.181.228.25";
+const int apiPort = 80;
 const char* apiHostHeader = "mad.cardinal.webd.pro";
+const char* apiPath = "/api.php?endpoint=scan";
 const char* apiKey = "YOUR_API_KEY";  // Optional, add if needed
 
 // State management
@@ -251,26 +253,73 @@ void connectWiFi() {
 
 void sendToAPI(String barcode) {
     if (!isConnected) return;
-    
-    HTTPClient http;
-    String url = String(apiHost) + "/api.php?endpoint=scan";
-    
-    http.begin(url);
-    http.addHeader("Host", apiHostHeader);
-    http.addHeader("Content-Type", "application/json");
-    
+
     // Build JSON payload
     String payload = "{\"barcode\":\"" + barcode + "\",\"household_id\":1,\"location_id\":1,\"movement_type\":\"" + String(modeToMovementType(currentMode)) + "\",\"quantity\":1}";
-    
+
     Serial.println("Sending to API: " + payload);
-    
-    int httpCode = http.POST(payload);
-    
+
+    WiFiClient client;
+    if (!client.connect(apiHostIp, apiPort)) {
+        Serial.println("API Error: TCP connect failed");
+        return;
+    }
+
+    client.print(String("POST ") + apiPath + " HTTP/1.1\r\n");
+    client.print(String("Host: ") + apiHostHeader + "\r\n");
+    client.print("User-Agent: MadScannerESP32/1.0\r\n");
+    client.print("Connection: close\r\n");
+    client.print("Content-Type: application/json\r\n");
+    client.print(String("Content-Length: ") + payload.length() + "\r\n\r\n");
+    client.print(payload);
+
+    uint32_t started = millis();
+    while (!client.available() && millis() - started < 8000) {
+        delay(10);
+    }
+
+    if (!client.available()) {
+        Serial.println("API Error: timeout waiting for response");
+        client.stop();
+        return;
+    }
+
+    String statusLine = client.readStringUntil('\n');
+    statusLine.trim();
+    Serial.println("API Raw: " + statusLine);
+
+    int httpCode = -1;
+    if (statusLine.startsWith("HTTP/1.1 ") || statusLine.startsWith("HTTP/1.0 ")) {
+        int firstSpace = statusLine.indexOf(' ');
+        int secondSpace = statusLine.indexOf(' ', firstSpace + 1);
+        if (firstSpace > 0 && secondSpace > firstSpace) {
+            httpCode = statusLine.substring(firstSpace + 1, secondSpace).toInt();
+        }
+    }
+
     if (httpCode == 200 || httpCode == 201) {
         Serial.println("API Response: Success");
     } else {
         Serial.println("API Response: " + String(httpCode));
     }
-    
-    http.end();
+
+    String body = "";
+    bool inBody = false;
+    while (client.connected() || client.available()) {
+        String line = client.readStringUntil('\n');
+        if (!inBody) {
+            if (line == "\r" || line.length() == 0) {
+                inBody = true;
+            }
+            continue;
+        }
+        body += line;
+    }
+
+    body.trim();
+    if (body.length() > 0) {
+        Serial.println("API Body: " + body);
+    }
+
+    client.stop();
 }
