@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.4] - 2026-05-06 17:11
+
+### Changed
+- Include IN/OUT mode firmware and wiring docs in tracked release
+
+
 ## [0.1.3] - 2026-05-06 17:11
 
 ### Changed
