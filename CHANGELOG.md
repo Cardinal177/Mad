@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.3] - 2026-05-06 18:26
+
+### Changed
+- Replace the temporary live test view with a mobile-first New Nordic HMI shell
+
+
 ## [0.2.2] - 2026-05-06 18:00
 
 ### Changed
