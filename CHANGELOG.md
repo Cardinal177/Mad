@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.9] - 2026-05-06 17:37
+
+### Changed
+- Tighten duplicate suppression: 6s window on ESP32 and backend
+
+
 ## [0.1.8] - 2026-05-06 17:33
 
 ### Changed
