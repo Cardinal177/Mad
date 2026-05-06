@@ -30,6 +30,14 @@ TX      -> GPIO 17 (Serial2 TX on ESP32)
 5V      -> 5V (or directly to USB if powered)
 ```
 
+#### Mode button (IN/OUT)
+```
+Button leg 1 -> GPIO 4
+Button leg 2 -> GND
+```
+
+Firmware uses `INPUT_PULLUP`, so pressing the button toggles between `IN` and `OUT` mode.
+
 **Note:** The scanner baud rate is typically 9600 bps. Verify with your device.
 
 ## Arduino IDE Setup
@@ -85,6 +93,7 @@ You need to implement this endpoint in the PHP backend.
 
 The OLED shows:
 - WiFi connection status
+- Current scan mode (`IN` or `OUT`)
 - Last scanned barcode
 - "Scan a barcode..." when idle
 

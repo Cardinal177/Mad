@@ -13,6 +13,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 // UART for barcode scanner (SEN0486)
 #define RXD 16  // ESP32 RX pin
 #define TXD 17  // ESP32 TX pin
+#define MODE_BUTTON_PIN 4  // Button to toggle IN/OUT mode (to GND)
 
 // WiFi credentials
 const char* ssid = "UniFi";
@@ -29,6 +30,19 @@ uint32_t lastScanTime = 0;
 bool isConnected = false;
 uint32_t lastDisplayRefresh = 0;
 uint32_t lastWifiRetryAt = 0;
+bool lastButtonState = HIGH;
+uint32_t lastButtonDebounceAt = 0;
+
+enum ScanMode {
+    MODE_IN,
+    MODE_OUT
+};
+
+ScanMode currentMode = MODE_IN;
+
+const char* modeToMovementType(ScanMode mode) {
+    return mode == MODE_OUT ? "out" : "in";
+}
 
 String wifiStatusToString(wl_status_t status) {
     switch (status) {
@@ -58,6 +72,9 @@ void setup() {
     // Initialize scanner serial
     Serial2.begin(9600, SERIAL_8N1, RXD, TXD);
     Serial.println("Scanner serial initialized");
+
+    pinMode(MODE_BUTTON_PIN, INPUT_PULLUP);
+    Serial.println("Mode button initialized on GPIO4");
     
     // Connect to WiFi
     connectWiFi();
@@ -73,6 +90,17 @@ void loop() {
         }
     }
 
+    bool buttonState = digitalRead(MODE_BUTTON_PIN);
+    if (buttonState != lastButtonState && millis() - lastButtonDebounceAt > 60) {
+        lastButtonDebounceAt = millis();
+        lastButtonState = buttonState;
+
+        if (buttonState == LOW) {
+            currentMode = (currentMode == MODE_IN) ? MODE_OUT : MODE_IN;
+            Serial.println(String("Mode switched to: ") + modeToMovementType(currentMode));
+        }
+    }
+
     // Read from barcode scanner
     if (Serial2.available()) {
         String scanned = Serial2.readStringUntil('\n');
@@ -81,7 +109,7 @@ void loop() {
         if (scanned.length() > 0) {
             lastScannedBarcode = scanned;
             lastScanTime = millis();
-            Serial.println("Scanned: " + scanned);
+            Serial.println("Scanned: " + scanned + " | mode=" + String(modeToMovementType(currentMode)));
             
             displayScanned(scanned);
             
@@ -122,12 +150,12 @@ void displayStatus() {
     display.setCursor(0, 0);
     display.println("=== Mad Scanner ===");
     
-    // WiFi status
+    // WiFi status + mode
     display.setCursor(0, 10);
     if (isConnected) {
-        display.println("WiFi: OK");
+        display.println(String("WiFi:OK ") + (currentMode == MODE_IN ? "IN" : "OUT"));
     } else {
-        display.println("WiFi: No");
+        display.println(String("WiFi:NO ") + (currentMode == MODE_IN ? "IN" : "OUT"));
     }
     
     // Last scanned (or waiting)
@@ -232,7 +260,7 @@ void sendToAPI(String barcode) {
     http.addHeader("Content-Type", "application/json");
     
     // Build JSON payload
-    String payload = "{\"barcode\":\"" + barcode + "\",\"household_id\":1,\"location_id\":1,\"movement_type\":\"in\",\"quantity\":1}";
+    String payload = "{\"barcode\":\"" + barcode + "\",\"household_id\":1,\"location_id\":1,\"movement_type\":\"" + String(modeToMovementType(currentMode)) + "\",\"quantity\":1}";
     
     Serial.println("Sending to API: " + payload);
     
