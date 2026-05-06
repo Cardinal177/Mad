@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.2] - 2026-05-06 17:06
+
+### Changed
+- Include ESP32 firmware and backend scan endpoint changes in tracked release
+
+
 ## [0.1.1] - 2026-05-06 17:06
 
 ### Changed
