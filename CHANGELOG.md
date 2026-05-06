@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.1] - 2026-05-06 17:52
+
+### Changed
+- Use correct InMobile REST v4 SMS endpoint format with Basic Auth and messages payload
+
+
 ## [0.2.0] - 2026-05-06 17:44
 
 ### Changed
