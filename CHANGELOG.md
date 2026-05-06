@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.6] - 2026-05-06 17:24
+
+### Changed
+- Root now serves test dashboard, API moved to api.php, deploy script uploads root api/live files
+
+
 ## [0.1.5] - 2026-05-06 17:18
 
 ### Changed
