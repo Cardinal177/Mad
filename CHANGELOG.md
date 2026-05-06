@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.5] - 2026-05-06 18:38
+
+### Changed
+- Use one .env file and update roadmap toward meal plans, recipes, and food locations
+
+
 ## [0.2.4] - 2026-05-06 18:33
 
 ### Changed
