@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.2] - 2026-05-06 18:00
+
+### Changed
+- Add dedicated auth.test_sms endpoint for live InMobile delivery checks
+
+
 ## [0.2.1] - 2026-05-06 17:52
 
 ### Changed
