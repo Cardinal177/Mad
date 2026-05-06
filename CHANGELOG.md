@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.8] - 2026-05-06 17:33
+
+### Changed
+- Add X-Device-Token protection and duplicate-scan suppression (client + server)
+
+
 ## [0.1.7] - 2026-05-06 17:28
 
 ### Changed
