@@ -1563,11 +1563,10 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                     <div class="chip" id="shoppingChip">0 på sedlen</div>
                 </div>
                 <p class="section-copy">Varer du allerede har lagt på indkøbssedlen vises her. Tilbud på dine mangler vises nedenunder.</p>
-                <div class="shopping-layout">
-                    <div class="shopping-main">
-                        <div class="subsection-head">
-                            <h3 class="subsection-title">Tilbud i aviser</h3>
-                        </div>
+                
+                <div class="subsection-head">
+                    <h3 class="subsection-title">Tilbud i aviser</h3>
+                </div>
                 <div class="store-cards-grid" id="storesGrid">
                     <a href="<?= htmlspecialchars($nettoPagePath) ?>?household_id=<?= htmlspecialchars((string) $householdId) ?>" class="store-card store-card-netto" style="text-decoration: none; color: inherit;">
                         <div class="store-card-header">
@@ -1595,10 +1594,11 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                     </a>
                 </div>
                 
-                        <div class="subsection-head" style="margin-top: 28px;">
-                            <h3 class="subsection-title">Tilbud på dine mangler</h3>
-                            <div class="chip" id="offersChip">0 tilbud fundet</div>
-                        </div>
+                <div class="shopping-layout">
+                    <div class="shopping-main">
+                        <div class="subsection-head" style="margin-top: 0;">
+                            <h3 class="subsection-title" style="margin-top: 0; margin-bottom: 12px;">Tilbud på dine mangler</h3>
+                        <div class="chip" style="font-size: 12px; margin-bottom: 12px; width: fit-content;" id="offersChip">0 tilbud fundet</div>
                         <div class="inventory-grid" id="offersBody"></div>
                         
                         <div class="subsection-head" style="margin-top: 28px;">
