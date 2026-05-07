@@ -1017,9 +1017,25 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                 font-size: 15px;
             }
         }
-        .shopping-layout {
+        .shopping-top-bar {
             display: grid;
             grid-template-columns: 1fr 320px;
+            gap: 24px;
+            align-items: start;
+            margin-bottom: 24px;
+        }
+        .search-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        .shopping-top-sidebar {
+            display: flex;
+            flex-direction: column;
+        }
+        .shopping-layout {
+            display: grid;
+            grid-template-columns: 1fr;
             gap: 24px;
             align-items: start;
         }
@@ -1043,11 +1059,11 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             overflow-y: auto;
         }
         @media (max-width: 1024px) {
-            .shopping-layout {
+            .shopping-top-bar {
                 grid-template-columns: 1fr;
             }
-            .shopping-sidebar {
-                order: -1;
+            .shopping-layout {
+                grid-template-columns: 1fr;
             }
         }
         .inventory-badges {
@@ -1594,6 +1610,19 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                     </a>
                 </div>
                 
+                <div class="shopping-top-bar">
+                    <div class="search-container">
+                        <input type="text" id="leafletOffersSearch" placeholder="Søg i tilbudsvarer..." style="padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-family: inherit; font-size: inherit; width: 100%;" />
+                        <div id="leafletOfferSuggestions" style="display:none; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.95); position: absolute; top: 100%; left: 0; right: 0; z-index: 10; margin-top: 4px;"></div>
+                    </div>
+                    <aside class="shopping-top-sidebar" style="min-width: 320px;">
+                        <div class="shopping-sticky" style="position: static; max-height: none; top: auto;">
+                            <h3 class="subsection-title" style="margin: 0 0 12px; font-size: 16px; border-bottom: 2px solid var(--line); padding-bottom: 8px;">Din sedel</h3>
+                            <div class="inventory-grid" id="shoppingBody"></div>
+                        </div>
+                    </aside>
+                </div>
+
                 <div class="shopping-layout">
                     <div class="shopping-main">
                         <div class="subsection-head" style="margin-top: 0;">
@@ -1605,20 +1634,8 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                             <h3 class="subsection-title">Søg i alle tilbudsaviser</h3>
                             <div class="chip" id="leafletOffersChip">0 fundet</div>
                         </div>
-                        <div style="display: grid; gap: 12px; margin-bottom: 16px;">
-                            <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
-                                <input type="text" id="leafletOffersSearch" placeholder="Søg i tilbudsvarer..." style="padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-family: inherit; font-size: inherit;" />
-                            </div>
-                            <div id="leafletOfferSuggestions" style="display:none; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.95);"></div>
-                        </div>
                         <div id="leafletOffersBody"></div>
                     </div>
-                    <aside class="shopping-sidebar" style="min-width: 320px;">
-                        <div class="shopping-sticky">
-                            <h3 class="subsection-title" style="margin: 0 0 12px; font-size: 16px; border-bottom: 2px solid var(--line); padding-bottom: 8px;">Din sedel</h3>
-                            <div class="inventory-grid" id="shoppingBody"></div>
-                        </div>
-                    </aside>
                 </div>
             </section>
 
