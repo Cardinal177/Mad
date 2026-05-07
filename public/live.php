@@ -1019,8 +1019,8 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
         }
         .shopping-top-bar {
             display: grid;
-            grid-template-columns: 1fr 320px;
-            gap: 24px;
+            grid-template-columns: 1fr;
+            gap: 16px;
             align-items: start;
             margin-bottom: 24px;
         }
@@ -1032,6 +1032,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
         .shopping-top-sidebar {
             display: flex;
             flex-direction: column;
+            width: 100%;
         }
         .shopping-layout {
             display: grid;
@@ -1615,9 +1616,9 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                         <input type="text" id="leafletOffersSearch" placeholder="Søg i tilbudsvarer..." style="padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-family: inherit; font-size: inherit; width: 100%;" />
                         <div id="leafletOfferSuggestions" style="display:none; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.95); position: absolute; top: 100%; left: 0; right: 0; z-index: 10; margin-top: 4px;"></div>
                     </div>
-                    <aside class="shopping-top-sidebar" style="min-width: 320px;">
+                    <aside class="shopping-top-sidebar">
                         <div class="shopping-sticky" style="position: static; max-height: none; top: auto;">
-                            <h3 class="subsection-title" style="margin: 0 0 12px; font-size: 16px; border-bottom: 2px solid var(--line); padding-bottom: 8px;">Din sedel</h3>
+                            <h3 class="subsection-title" style="margin: 0 0 12px; font-size: 16px; border-bottom: 2px solid var(--line); padding-bottom: 8px;">Indkøbsseddel</h3>
                             <div class="inventory-grid" id="shoppingBody"></div>
                         </div>
                     </aside>
