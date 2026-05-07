@@ -159,10 +159,16 @@ function extract_catalog_ids(string $html): array
     preg_match_all('/ern:catalog:([A-Za-z0-9]+)/', $decodedHtml, $matches);
     $ids = array_values(array_unique($matches[1] ?? []));
 
-    // Kvickly/Coop pages often expose catalog id as data-publication-id.
+    // Kvickly/Coop pages expose catalog id as data-publication-id or data-id.
     preg_match_all('/data-publication-id\s*=\s*["\']?([A-Za-z0-9]{6,})["\']?/i', $decodedHtml, $publicationMatches);
     if (!empty($publicationMatches[1])) {
         $ids = array_values(array_unique(array_merge($ids, $publicationMatches[1])));
+        // Also check for data-id attribute (Kvickly uses this).
+        preg_match_all('/data-id\s*=\s*["\']?([A-Za-z0-9]{6,})["\']?/i', $decodedHtml, $dataIdMatches);
+        if (!empty($dataIdMatches[1])) {
+            $ids = array_values(array_unique(array_merge($ids, $dataIdMatches[1])));
+        }
+
     }
 
     return array_values(array_filter($ids, static fn(string $id): bool => strlen($id) >= 6));
