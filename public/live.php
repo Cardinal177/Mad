@@ -911,6 +911,112 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             color: var(--muted);
             line-height: 1.5;
         }
+        .store-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 16px;
+            margin: 20px 0;
+        }
+        .store-card {
+            display: flex;
+            flex-direction: column;
+            padding: 20px 16px;
+            border-radius: 16px;
+            border: 2px solid transparent;
+            transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        .store-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: 0.04;
+            z-index: -1;
+        }
+        .store-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(0,0,0,0.1);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.12);
+        }
+        .store-card-netto {
+            background: linear-gradient(135deg, #ffd54f 0%, #ffca28 100%);
+            color: #332200;
+        }
+        .store-card-netto .store-card-icon {
+            background: rgba(255,255,255,0.3);
+            color: #d48806;
+        }
+        .store-card-kvickly {
+            background: linear-gradient(135deg, #ef5350 0%, #d32f2f 100%);
+            color: white;
+        }
+        .store-card-kvickly .store-card-icon {
+            background: rgba(255,255,255,0.25);
+            color: white;
+        }
+        .store-card-365 {
+            background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%);
+            color: white;
+        }
+        .store-card-365 .store-card-icon {
+            background: rgba(255,255,255,0.25);
+            color: white;
+        }
+        .store-card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .store-card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 22px;
+            flex-shrink: 0;
+        }
+        .store-card-title {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 800;
+            line-height: 1;
+        }
+        .store-card-copy {
+            margin: 0 0 12px 0;
+            font-size: 12px;
+            opacity: 0.85;
+            line-height: 1.4;
+            flex-grow: 1;
+        }
+        .store-card-cta {
+            font-size: 13px;
+            font-weight: 700;
+            opacity: 0.75;
+            margin-top: auto;
+        }
+        @media (max-width: 640px) {
+            .store-cards-grid {
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                gap: 12px;
+            }
+            .store-card-icon {
+                width: 40px;
+                height: 40px;
+                font-size: 18px;
+            }
+            .store-card-title {
+                font-size: 15px;
+            }
+        }
         .inventory-badges {
             display: flex;
             flex-wrap: wrap;
@@ -1425,13 +1531,45 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                 </div>
                 <p class="section-copy">Varer du allerede har lagt på indkøbssedlen vises her. Tilbud på dine mangler vises nedenunder.</p>
                 <div class="inventory-grid" id="shoppingBody"></div>
-                <div class="subsection-head">
+                
+                <div class="subsection-head" style="margin-top: 28px;">
+                    <h3 class="subsection-title">Tilbud i aviser</h3>
+                </div>
+                <div class="store-cards-grid" id="storesGrid">
+                    <a href="<?= htmlspecialchars($nettoPagePath) ?>?household_id=<?= htmlspecialchars((string) $householdId) ?>" class="store-card store-card-netto" style="text-decoration: none; color: inherit;">
+                        <div class="store-card-header">
+                            <div class="store-card-icon">N</div>
+                            <h3 class="store-card-title">Netto</h3>
+                        </div>
+                        <p class="store-card-copy">Se aktuelle tilbud og udsalg</p>
+                        <div class="store-card-cta">Gennemse →</div>
+                    </a>
+                    <a href="<?= htmlspecialchars($kvicklyPagePath) ?>?household_id=<?= htmlspecialchars((string) $householdId) ?>" class="store-card store-card-kvickly" style="text-decoration: none; color: inherit;">
+                        <div class="store-card-header">
+                            <div class="store-card-icon">K</div>
+                            <h3 class="store-card-title">Kvickly</h3>
+                        </div>
+                        <p class="store-card-copy">Se aktuelle tilbud og udsalg</p>
+                        <div class="store-card-cta">Gennemse →</div>
+                    </a>
+                    <a href="<?= htmlspecialchars($discount365PagePath) ?>?household_id=<?= htmlspecialchars((string) $householdId) ?>" class="store-card store-card-365" style="text-decoration: none; color: inherit;">
+                        <div class="store-card-header">
+                            <div class="store-card-icon">365</div>
+                            <h3 class="store-card-title">365discount</h3>
+                        </div>
+                        <p class="store-card-copy">Se aktuelle tilbud og udsalg</p>
+                        <div class="store-card-cta">Gennemse →</div>
+                    </a>
+                </div>
+                
+                <div class="subsection-head" style="margin-top: 28px;">
                     <h3 class="subsection-title">Tilbud på dine mangler</h3>
                     <div class="chip" id="offersChip">0 tilbud fundet</div>
                 </div>
                 <div class="inventory-grid" id="offersBody"></div>
-                <div class="subsection-head">
-                    <h3 class="subsection-title">Varer fundet i tilbudsaviser</h3>
+                
+                <div class="subsection-head" style="margin-top: 28px;">
+                    <h3 class="subsection-title">Søg i alle tilbudsaviser</h3>
                     <div class="chip" id="leafletOffersChip">0 fundet</div>
                 </div>
                 <div style="display: grid; gap: 12px; margin-bottom: 16px;">
@@ -1441,29 +1579,6 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                     <div id="leafletOfferSuggestions" style="display:none; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.95);"></div>
                 </div>
                 <div id="leafletOffersBody"></div>
-                <div class="placeholder-grid" id="storesGrid">
-                    <a href="<?= htmlspecialchars($nettoPagePath) ?>?household_id=<?= htmlspecialchars((string) $householdId) ?>" class="placeholder-card" style="text-decoration: none; color: inherit; display: block; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer;">
-                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                            <div style="width: 40px; height: 40px; background: #fdd835; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #111; font-weight: 800; font-size: 20px;">N</div>
-                            <h3 style="margin: 0; font-size: 16px;">Netto tilbud</h3>
-                        </div>
-                        <p>Se alle aktuelle Netto tilbud og tilføj til indkøbsseddel</p>
-                    </a>
-                    <a href="<?= htmlspecialchars($kvicklyPagePath) ?>?household_id=<?= htmlspecialchars((string) $householdId) ?>" class="placeholder-card" style="text-decoration: none; color: inherit; display: block; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer;">
-                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                            <div style="width: 40px; height: 40px; background: #d32f2f; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 20px;">K</div>
-                            <h3 style="margin: 0; font-size: 16px;">Kvickly tilbud</h3>
-                        </div>
-                        <p>Se alle aktuelle Kvickly tilbud og tilføj til indkøbsseddel</p>
-                    </a>
-                    <a href="<?= htmlspecialchars($discount365PagePath) ?>?household_id=<?= htmlspecialchars((string) $householdId) ?>" class="placeholder-card" style="text-decoration: none; color: inherit; display: block; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer;">
-                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                            <div style="width: 40px; height: 40px; background: #2e7d32; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 14px; letter-spacing: 0.3px;">365</div>
-                            <h3 style="margin: 0; font-size: 16px;">365discount tilbud</h3>
-                        </div>
-                        <p>Se alle aktuelle 365discount tilbud og tilføj til indkøbsseddel</p>
-                    </a>
-                </div>
             </section>
 
             <section class="card section" id="activitySection">
