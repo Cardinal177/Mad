@@ -1017,6 +1017,39 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                 font-size: 15px;
             }
         }
+        .shopping-layout {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 24px;
+            align-items: start;
+        }
+        .shopping-main {
+            display: grid;
+            gap: 20px;
+        }
+        .shopping-sidebar {
+            display: flex;
+            flex-direction: column;
+        }
+        .shopping-sticky {
+            position: sticky;
+            top: 80px;
+            background: var(--panel-strong);
+            padding: 16px;
+            border-radius: 20px;
+            border: 1px solid var(--line);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+        @media (max-width: 1024px) {
+            .shopping-layout {
+                grid-template-columns: 1fr;
+            }
+            .shopping-sidebar {
+                order: -1;
+            }
+        }
         .inventory-badges {
             display: flex;
             flex-wrap: wrap;
@@ -1530,11 +1563,11 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                     <div class="chip" id="shoppingChip">0 på sedlen</div>
                 </div>
                 <p class="section-copy">Varer du allerede har lagt på indkøbssedlen vises her. Tilbud på dine mangler vises nedenunder.</p>
-                <div class="inventory-grid" id="shoppingBody"></div>
-                
-                <div class="subsection-head" style="margin-top: 28px;">
-                    <h3 class="subsection-title">Tilbud i aviser</h3>
-                </div>
+                <div class="shopping-layout">
+                    <div class="shopping-main">
+                        <div class="subsection-head">
+                            <h3 class="subsection-title">Tilbud i aviser</h3>
+                        </div>
                 <div class="store-cards-grid" id="storesGrid">
                     <a href="<?= htmlspecialchars($nettoPagePath) ?>?household_id=<?= htmlspecialchars((string) $householdId) ?>" class="store-card store-card-netto" style="text-decoration: none; color: inherit;">
                         <div class="store-card-header">
@@ -1562,23 +1595,31 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                     </a>
                 </div>
                 
-                <div class="subsection-head" style="margin-top: 28px;">
-                    <h3 class="subsection-title">Tilbud på dine mangler</h3>
-                    <div class="chip" id="offersChip">0 tilbud fundet</div>
-                </div>
-                <div class="inventory-grid" id="offersBody"></div>
-                
-                <div class="subsection-head" style="margin-top: 28px;">
-                    <h3 class="subsection-title">Søg i alle tilbudsaviser</h3>
-                    <div class="chip" id="leafletOffersChip">0 fundet</div>
-                </div>
-                <div style="display: grid; gap: 12px; margin-bottom: 16px;">
-                    <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
-                        <input type="text" id="leafletOffersSearch" placeholder="Søg i tilbudsvarer..." style="padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-family: inherit; font-size: inherit;" />
+                        <div class="subsection-head" style="margin-top: 28px;">
+                            <h3 class="subsection-title">Tilbud på dine mangler</h3>
+                            <div class="chip" id="offersChip">0 tilbud fundet</div>
+                        </div>
+                        <div class="inventory-grid" id="offersBody"></div>
+                        
+                        <div class="subsection-head" style="margin-top: 28px;">
+                            <h3 class="subsection-title">Søg i alle tilbudsaviser</h3>
+                            <div class="chip" id="leafletOffersChip">0 fundet</div>
+                        </div>
+                        <div style="display: grid; gap: 12px; margin-bottom: 16px;">
+                            <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
+                                <input type="text" id="leafletOffersSearch" placeholder="Søg i tilbudsvarer..." style="padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-family: inherit; font-size: inherit;" />
+                            </div>
+                            <div id="leafletOfferSuggestions" style="display:none; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.95);"></div>
+                        </div>
+                        <div id="leafletOffersBody"></div>
                     </div>
-                    <div id="leafletOfferSuggestions" style="display:none; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.95);"></div>
+                    <aside class="shopping-sidebar" style="min-width: 320px;">
+                        <div class="shopping-sticky">
+                            <h3 class="subsection-title" style="margin: 0 0 12px; font-size: 16px; border-bottom: 2px solid var(--line); padding-bottom: 8px;">Din sedel</h3>
+                            <div class="inventory-grid" id="shoppingBody"></div>
+                        </div>
+                    </aside>
                 </div>
-                <div id="leafletOffersBody"></div>
             </section>
 
             <section class="card section" id="activitySection">
