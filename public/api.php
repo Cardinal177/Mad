@@ -16,6 +16,7 @@ require_once $baseDir . '/src/handlers/AdminHandler.php';
 require_once $baseDir . '/src/handlers/AiHandler.php';
 require_once $baseDir . '/src/handlers/ConfigHandler.php';
 require_once $baseDir . '/src/handlers/NutritionHandler.php';
+require_once $baseDir . '/src/handlers/IngredientHandler.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -46,6 +47,26 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'recipes') {
         handleRecipeList($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'shopping.candidates') {
+        handleShoppingCandidates($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'shopping.list') {
+        handleShoppingList($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'shopping.offer_feed') {
+        handleShoppingOfferFeed($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'shopping.list.add_items') {
+        handleShoppingListAddItems($pdo);
         exit;
     }
 
@@ -119,6 +140,16 @@ try {
         exit;
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'ingredients.lookup') {
+        handleIngredientLookup($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'ingredients.create') {
+        handleIngredientCreate($pdo);
+        exit;
+    }
+
     $result = $pdo->query('SELECT NOW() AS server_time')->fetch();
     $tables = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
 
@@ -148,6 +179,10 @@ try {
             '/api.php?endpoint=recent' => 'Recent inventory scan movements',
             '/api.php?endpoint=locations' => 'Household locations for authenticated user',
             '/api.php?endpoint=recipes' => 'Household recipes for authenticated user',
+            '/api.php?endpoint=shopping.candidates' => 'GET shopping candidates (minimum reached + manual list) with active offers',
+            '/api.php?endpoint=shopping.list' => 'GET active shopping list for authenticated household',
+            '/api.php?endpoint=shopping.offer_feed' => 'GET all scraped leaflet offers (also unmatched products)',
+            '/api.php?endpoint=shopping.list.add_items' => 'POST add items to active shopping list from leaflet offers',
             '/api.php?endpoint=auth.request_code' => 'POST request 2FA code by initials',
             '/api.php?endpoint=auth.verify_code' => 'POST verify 2FA code and issue access token',
             '/api.php?endpoint=auth.me' => 'GET current user from bearer token',
@@ -160,6 +195,8 @@ try {
             '/api.php?endpoint=ai.meal_ideas' => 'POST AI meal ideas from household inventory (Anthropic)',
             '/api.php?endpoint=nutrition.quality' => 'GET nutrition data quality summary (platform admin)',
             '/api.php?endpoint=nutrition.match.run' => 'POST run Frida-style nutrition auto match (platform admin)',
+            '/api.php?endpoint=ingredients.lookup&barcode=...' => 'GET ingredient lookup by barcode (authenticated)',
+            '/api.php?endpoint=ingredients.create' => 'POST create ingredient with inventory + price/offer metadata (authenticated)',
             '/' => 'Live test dashboard',
         ],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

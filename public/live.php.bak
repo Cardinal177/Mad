@@ -4,34 +4,10 @@ declare(strict_types=1);
 
 $householdId = max(1, (int) ($_GET['household_id'] ?? 1));
 $householdName = trim((string) ($_GET['household_name'] ?? ''));
-$requestUri = (string) ($_SERVER['REQUEST_URI'] ?? '');
-$nettoPagePath = str_contains($requestUri, '/mad/')
-    ? '/mad/public/stores/netto.php'
-    : 'stores/netto.php';
-$kvicklyPagePath = str_contains($requestUri, '/mad/')
-    ? '/mad/public/stores/kvickly.php'
-    : 'stores/kvickly.php';
-$discount365PagePath = str_contains($requestUri, '/mad/')
-    ? '/mad/public/stores/discount365.php'
-    : 'stores/discount365.php';
 
 if ($householdName == '') {
     $householdName = 'Husstand ' . $householdId;
 }
-
-$allowedPages = ['overblik', 'madplan', 'opskrifter', 'lager', 'indkoeb', 'opsaetning'];
-$currentPage = strtolower(trim((string) ($_GET['page'] ?? 'overblik')));
-if (!in_array($currentPage, $allowedPages, true)) {
-    $currentPage = 'overblik';
-}
-
-$navParams = $_GET;
-unset($navParams['page']);
-
-$buildPageUrl = static function (string $page) use ($navParams): string {
-    $query = array_merge($navParams, ['page' => $page]);
-    return 'live.php?' . http_build_query($query);
-};
 ?>
 <!doctype html>
 <html lang="da">
@@ -159,93 +135,6 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-        }
-        .page-menu {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-        .page-link {
-            display: inline-flex;
-            align-items: center;
-            min-height: 40px;
-            padding: 0 14px;
-            border-radius: 999px;
-            border: 1px solid rgba(20,35,29,0.12);
-            background: rgba(255,252,247,0.76);
-            color: var(--text);
-            font-size: 13px;
-            font-weight: 600;
-            letter-spacing: 0.02em;
-        }
-        .page-link.active {
-            background: var(--text);
-            color: #fbf7ef;
-            border-color: transparent;
-        }
-        .admin-only {
-        }
-        .auth-gate {
-            position: fixed;
-            inset: 0;
-            z-index: 9999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            background: rgba(20, 35, 29, 0.48);
-            backdrop-filter: blur(6px);
-        }
-        .auth-gate.hidden {
-            display: none;
-        }
-        body.auth-pending #authGate {
-            display: none;
-        }
-        body.auth-pending #top {
-            visibility: hidden;
-        }
-        .auth-card {
-            width: min(520px, 100%);
-            border: 1px solid rgba(255,255,255,0.68);
-            border-radius: 22px;
-            background: rgba(255,252,247,0.94);
-            box-shadow: var(--shadow);
-            padding: 18px;
-        }
-        .auth-card h2 {
-            margin: 0 0 8px;
-            font-family: "Iowan Old Style", "Palatino Linotype", serif;
-            font-size: 28px;
-            line-height: 1;
-        }
-        .auth-card p {
-            margin: 0 0 12px;
-            color: var(--muted);
-            font-size: 14px;
-            line-height: 1.45;
-        }
-        .auth-grid {
-            display: grid;
-            gap: 10px;
-        }
-        .auth-grid input {
-            width: 100%;
-            border: 1px solid rgba(20,35,29,0.14);
-            border-radius: 10px;
-            padding: 10px 12px;
-            font-size: 15px;
-            color: var(--text);
-            background: rgba(255,255,255,0.8);
-        }
-        .auth-status {
-            margin-top: 10px;
-            min-height: 20px;
-            color: var(--muted);
-            font-size: 13px;
-        }
-        .auth-status.err {
-            color: var(--berry);
         }
         .brand {
             display: inline-flex;
@@ -481,19 +370,6 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             font-size: 14px;
             line-height: 1.5;
         }
-        .subsection-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-top: 16px;
-            margin-bottom: 10px;
-        }
-        .subsection-title {
-            margin: 0;
-            font-size: 17px;
-            line-height: 1.2;
-        }
         .inventory-grid,
         .flow-grid,
         .placeholder-grid,
@@ -672,11 +548,6 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
         .placeholder-card {
             background:
                 linear-gradient(180deg, rgba(255,252,247,0.94) 0%, rgba(245,237,226,0.88) 100%);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .placeholder-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(20, 35, 29, 0.12);
         }
         .placeholder-card h3 {
             margin: 0 0 8px;
@@ -882,9 +753,6 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             color: var(--muted);
             line-height: 1.45;
         }
-        .admin-status.err {
-            color: #a12626;
-        }
         .admin-list {
             padding: 10px;
             border-radius: 12px;
@@ -910,115 +778,6 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             margin: 0;
             color: var(--muted);
             line-height: 1.5;
-        }
-        .inventory-badges {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 6px;
-        }
-        .type-badge,
-        .location-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 4px 9px;
-            border-radius: 999px;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-        .type-badge {
-            background: rgba(47,106,86,0.1);
-            color: var(--accent);
-        }
-        .location-badge {
-            background: rgba(236,226,212,0.9);
-            color: var(--muted);
-        }
-        .ingredient-create-panel summary::-webkit-details-marker {
-            display: none;
-        }
-        .shopping-compact {
-            display: grid;
-            gap: 12px;
-        }
-        .shopping-store-group {
-            border: 1px solid var(--line);
-            border-radius: 14px;
-            background: rgba(255,252,247,0.92);
-            overflow: hidden;
-        }
-        .shopping-store-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            padding: 9px 12px;
-            background: rgba(236,226,212,0.7);
-            border-bottom: 1px solid var(--line);
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            color: var(--muted);
-        }
-        .shopping-store-count {
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--accent);
-        }
-        .shopping-list {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-        }
-        .shopping-row {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            gap: 10px;
-            align-items: center;
-            padding: 8px 12px;
-            border-top: 1px solid rgba(20,35,29,0.08);
-        }
-        .shopping-row:first-child {
-            border-top: 0;
-        }
-        .shopping-row.checked {
-            opacity: 0.55;
-        }
-        .shopping-row-main {
-            min-width: 0;
-        }
-        .shopping-name {
-            margin: 0;
-            font-size: 14px;
-            line-height: 1.2;
-            font-weight: 700;
-        }
-        .shopping-row.checked .shopping-name {
-            text-decoration: line-through;
-        }
-        .shopping-meta {
-            margin-top: 3px;
-            font-size: 11px;
-            color: var(--muted);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .shopping-qty {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 34px;
-            height: 24px;
-            border-radius: 999px;
-            background: rgba(47,106,86,0.12);
-            color: var(--accent);
-            font-size: 12px;
-            font-weight: 800;
-            padding: 0 9px;
         }
         .stack {
             display: grid;
@@ -1076,9 +835,6 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             color: #f5efe6;
             box-shadow: 0 14px 30px rgba(20,35,29,0.26);
             backdrop-filter: blur(22px);
-        }
-        .layout.single-page {
-            grid-template-columns: 1fr;
         }
         .nav-item {
             display: grid;
@@ -1143,26 +899,10 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
-        .bottom-nav {
-            display: none;
-        }
     </style>
 </head>
-<body class="auth-pending">
-<div id="authGate" class="auth-gate">
-    <div class="auth-card">
-        <h2>Log ind</h2>
-        <p>Skriv dine initialer. Vi sender en 2FA SMS-kode automatisk. Indtast derefter koden for at fortsætte.</p>
-        <div class="auth-grid">
-            <input id="gateInitials" type="text" maxlength="10" placeholder="Initialer (fx CMP)">
-            <input id="gateChallenge" type="text" placeholder="Challenge ID" readonly>
-            <input id="gateCode" type="text" maxlength="6" inputmode="numeric" placeholder="SMS kode (6 cifre)">
-        </div>
-        <div class="auth-status" id="gateStatus">2FA påkrævet.</div>
-    </div>
-</div>
-
-<main class="app" id="top" aria-hidden="true">
+<body>
+<main class="app" id="top">
     <header class="masthead">
         <div class="topbar">
             <div class="brand">
@@ -1178,16 +918,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             </div>
         </div>
 
-        <nav class="page-menu" aria-label="Sidemenu">
-            <a class="page-link<?= $currentPage === 'overblik' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('overblik'), ENT_QUOTES, 'UTF-8') ?>">Overblik</a>
-            <a class="page-link<?= $currentPage === 'madplan' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('madplan'), ENT_QUOTES, 'UTF-8') ?>">Madplan</a>
-            <a class="page-link<?= $currentPage === 'opskrifter' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('opskrifter'), ENT_QUOTES, 'UTF-8') ?>">Opskrifter</a>
-            <a class="page-link<?= $currentPage === 'lager' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('lager'), ENT_QUOTES, 'UTF-8') ?>">Lager</a>
-            <a class="page-link<?= $currentPage === 'indkoeb' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('indkoeb'), ENT_QUOTES, 'UTF-8') ?>">Indkob</a>
-            <a class="page-link<?= $currentPage === 'opsaetning' ? ' active' : '' ?> admin-only" id="setupMenuLink" href="opsaetning.php" style="display:none;">Opsaetning</a>
-        </nav>
-
-        <section class="context-strip" aria-label="Husstand og datakilder" id="overviewContext">
+        <section class="context-strip" aria-label="Husstand og datakilder">
             <div class="context-grid">
                 <article class="context-card">
                     <span class="context-label">Aktiv husstand</span>
@@ -1211,7 +942,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             </div>
         </section>
 
-        <section class="hero" id="overviewHero">
+        <section class="hero">
             <div class="hero-copy">
                 <div class="eyebrow">Mobil HMI ramme</div>
                 <h1>Køkkenets rolige overblik.</h1>
@@ -1237,7 +968,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
         </section>
     </header>
 
-    <section class="status-grid" aria-label="Statusoversigt" id="overviewStats">
+    <section class="status-grid" aria-label="Statusoversigt">
         <article class="metric">
             <div class="metric-name">Produkter i hjemmet</div>
             <div class="metric-value" id="productCount">0</div>
@@ -1255,7 +986,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
         </article>
     </section>
 
-    <div class="layout" id="mainLayout">
+    <div class="layout">
         <section class="card section" id="madplanSection">
             <div class="section-head">
                 <div>
@@ -1344,74 +1075,6 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                     </div>
                     <div class="chip" id="inventoryChip">0 i balance</div>
                 </div>
-                <details class="planner-card ingredient-create-panel" style="margin-bottom:12px;" id="ingredientCreateDetails">
-                    <summary style="cursor:pointer; font-weight:700; font-size:16px; list-style:none; display:flex; justify-content:space-between; align-items:center;">
-                        <span>Ny ingrediens</span>
-                        <span class="chip" style="font-size:11px;">+ Tilføj</span>
-                    </summary>
-                    <p style="margin:10px 0 14px; color:var(--muted); font-size:13px;">Opret ingrediens manuelt eller slå op via barcode. Udløbsdato registreres automatisk ved ind-scanning.</p>
-
-                    <div class="admin-row" style="margin-bottom:10px;">
-                        <span class="admin-label">Grundoplysninger</span>
-                        <div class="admin-grid cols-2">
-                            <input class="admin-input" id="ingredientBarcode" type="text" placeholder="Barcode (scan eller skriv)">
-                            <input class="admin-input" id="ingredientName" type="text" placeholder="Navn (fx Havregryn)">
-                            <input class="admin-input" id="ingredientBrand" type="text" placeholder="Brand (fx Amo)">
-                            <input class="admin-input" id="ingredientImageUrl" type="url" placeholder="Billede URL (valgfri)">
-                        </div>
-                    </div>
-
-                    <div class="admin-grid cols-2" style="margin-bottom:10px;">
-                        <div>
-                            <span class="admin-label">Produkttype</span>
-                            <select class="admin-select" id="ingredientProductType">
-                                <option value="tørvare">Tørvare</option>
-                                <option value="ferskvare">Ferskvare</option>
-                                <option value="mejeri">Mejeri</option>
-                                <option value="kød">Kød</option>
-                                <option value="fisk">Fisk &amp; skaldyr</option>
-                                <option value="frugt_groent">Frugt &amp; grønt</option>
-                                <option value="frostvare">Frostvare</option>
-                                <option value="krydderier">Krydderier &amp; urter</option>
-                                <option value="drikke">Drikke</option>
-                                <option value="konserves">Konserves &amp; dåse</option>
-                                <option value="brød">Brød &amp; bageri</option>
-                                <option value="andet" selected>Andet</option>
-                            </select>
-                        </div>
-                        <div>
-                            <span class="admin-label">Lokation</span>
-                            <select class="admin-select" id="ingredientLocationId">
-                                <option value="">Hentes automatisk…</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="admin-row" style="margin-bottom:10px;">
-                        <span class="admin-label">Beholdning</span>
-                        <div class="admin-grid cols-2">
-                            <input class="admin-input" id="ingredientQuantity" type="number" step="0.1" min="0" placeholder="Startbeholdning (antal)">
-                            <input class="admin-input" id="ingredientMinimum" type="number" step="0.1" min="0" placeholder="Minimum (alarm under)">
-                        </div>
-                    </div>
-
-                    <div class="admin-row" style="margin-bottom:12px;">
-                        <span class="admin-label">Priser (valgfri)</span>
-                        <div class="admin-grid cols-2">
-                            <input class="admin-input" id="ingredientStore" type="text" placeholder="Butik (standardpris)">
-                            <input class="admin-input" id="ingredientPrice" type="number" step="0.01" min="0" placeholder="Standardpris (kr)">
-                            <input class="admin-input" id="ingredientOfferStore" type="text" placeholder="Butik (tilbud)">
-                            <input class="admin-input" id="ingredientOfferPrice" type="number" step="0.01" min="0" placeholder="Tilbudspris (kr)">
-                            <input class="admin-input" id="ingredientOfferValidTo" type="date" title="Tilbud gyldig til">
-                        </div>
-                    </div>
-
-                    <div class="admin-actions">
-                        <button class="admin-button alt" type="button" id="ingredientLookupBtn">Slå op barcode</button>
-                        <button class="admin-button" type="button" id="ingredientCreateBtn">Opret ingrediens</button>
-                    </div>
-                    <div class="admin-status" id="ingredientCreateStatus" style="margin-top:8px;"></div>
-                </details>
                 <div class="inventory-grid" id="productsBody"></div>
             </section>
 
@@ -1419,50 +1082,19 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                 <div class="section-head">
                     <div>
                         <p class="section-kicker">Indkøb</p>
-                        <h2 class="section-title">Aktiv indkøbsseddel</h2>
+                        <h2 class="section-title">Lav beholdning bliver til næste liste</h2>
                     </div>
-                    <div class="chip" id="shoppingChip">0 på sedlen</div>
+                    <div class="chip" id="shoppingChip">0 klare kandidater</div>
                 </div>
-                <p class="section-copy">Varer du allerede har lagt på indkøbssedlen vises her. Tilbud på dine mangler vises nedenunder.</p>
-                <div class="inventory-grid" id="shoppingBody"></div>
-                <div class="subsection-head">
-                    <h3 class="subsection-title">Tilbud på dine mangler</h3>
-                    <div class="chip" id="offersChip">0 tilbud fundet</div>
-                </div>
-                <div class="inventory-grid" id="offersBody"></div>
-                <div class="subsection-head">
-                    <h3 class="subsection-title">Varer fundet i tilbudsaviser</h3>
-                    <div class="chip" id="leafletOffersChip">0 fundet</div>
-                </div>
-                <div style="display: grid; gap: 12px; margin-bottom: 16px;">
-                    <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
-                        <input type="text" id="leafletOffersSearch" placeholder="Søg i tilbudsvarer..." style="padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-family: inherit; font-size: inherit;" />
-                    </div>
-                    <div id="leafletOfferSuggestions" style="display:none; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.95);"></div>
-                </div>
-                <div id="leafletOffersBody"></div>
-                <div class="placeholder-grid" id="storesGrid">
-                    <a href="<?= htmlspecialchars($nettoPagePath) ?>?household_id=<?= htmlspecialchars((string) $householdId) ?>" class="placeholder-card" style="text-decoration: none; color: inherit; display: block; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer;">
-                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                            <div style="width: 40px; height: 40px; background: #fdd835; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #111; font-weight: 800; font-size: 20px;">N</div>
-                            <h3 style="margin: 0; font-size: 16px;">Netto tilbud</h3>
-                        </div>
-                        <p>Se alle aktuelle Netto tilbud og tilføj til indkøbsseddel</p>
-                    </a>
-                    <a href="<?= htmlspecialchars($kvicklyPagePath) ?>?household_id=<?= htmlspecialchars((string) $householdId) ?>" class="placeholder-card" style="text-decoration: none; color: inherit; display: block; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer;">
-                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                            <div style="width: 40px; height: 40px; background: #d32f2f; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 20px;">K</div>
-                            <h3 style="margin: 0; font-size: 16px;">Kvickly tilbud</h3>
-                        </div>
-                        <p>Se alle aktuelle Kvickly tilbud og tilføj til indkøbsseddel</p>
-                    </a>
-                    <a href="<?= htmlspecialchars($discount365PagePath) ?>?household_id=<?= htmlspecialchars((string) $householdId) ?>" class="placeholder-card" style="text-decoration: none; color: inherit; display: block; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer;">
-                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                            <div style="width: 40px; height: 40px; background: #2e7d32; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 14px; letter-spacing: 0.3px;">365</div>
-                            <h3 style="margin: 0; font-size: 16px;">365discount tilbud</h3>
-                        </div>
-                        <p>Se alle aktuelle 365discount tilbud og tilføj til indkøbsseddel</p>
-                    </a>
+                <div class="placeholder-grid">
+                    <article class="placeholder-card">
+                        <h3>Automatisk indkøbsseddel</h3>
+                        <p>Varer under minimum kan blive næste mobil-liste. Når vi forbinder madplan og opskrifter, kan listen prioriteres efter både husholdningens behov og lokation.</p>
+                    </article>
+                    <article class="placeholder-card">
+                        <h3>Butik og tilbud</h3>
+                        <p>README peger på butikstilbud som næste lag. Denne zone er lagt klar til at samle butik, status og tilbud uden at flytte rundt på resten af HMI'et.</p>
+                    </article>
                 </div>
             </section>
 
@@ -1507,7 +1139,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                         <h3>Datakilder og styring</h3>
                         <p>Open Food Facts bruges til scanberigelse. Frida/DTU bør næste gang beskrives som en egentlig integration med mapping, fallback-regler og brug i opskriftsberegninger pr. husstand.</p>
                         <p style="margin-top:8px; font-size:13px;">API status og endpoint-oversigt: <a href="api.php" target="_blank" rel="noopener">åbn api.php</a></p>
-                        <p class="admin-only" id="setupInlineWrap" style="display:none; margin-top:6px; font-size:13px;"><a id="setupInlineLink" href="opsaetning.php" style="color:var(--accent);">→ Åbn Opsætning (API-nøgler, brugere, husstande)</a></p>
+                        <p style="margin-top:6px; font-size:13px;"><a href="opsaetning.php" style="color:var(--accent);">→ Åbn Opsætning (API-nøgler, brugere, husstande)</a></p>
                     </article>
                     <article class="settings-card">
                         <h3>Admin-konsol</h3>
@@ -1614,32 +1246,31 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
     </div>
 
     <nav class="bottom-nav" aria-label="Primær navigation">
-        <a class="nav-item<?= $currentPage === 'overblik' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('overblik'), ENT_QUOTES, 'UTF-8') ?>" data-nav-target="top">
-            <strong>🏠</strong>
-            <span>Overblik</span>
-        </a>
-        <a class="nav-item<?= $currentPage === 'madplan' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('madplan'), ENT_QUOTES, 'UTF-8') ?>" data-nav-target="madplanSection">
-            <strong>📅</strong>
-            <span>Madplan</span>
-        </a>
-        <a class="nav-item<?= $currentPage === 'opskrifter' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('opskrifter'), ENT_QUOTES, 'UTF-8') ?>" data-nav-target="recipesSection">
-            <strong>📖</strong>
+        <a class="nav-item" href="#recipesSection" data-nav-target="recipesSection">
+            <strong>◌</strong>
             <span>Opskrifter</span>
         </a>
-        <a class="nav-item<?= $currentPage === 'lager' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('lager'), ENT_QUOTES, 'UTF-8') ?>" data-nav-target="inventorySection">
-            <strong>📦</strong>
+        <a class="nav-item" href="#inventorySection" data-nav-target="inventorySection">
+            <strong>◎</strong>
             <span>Lager</span>
         </a>
-        <a class="nav-item<?= $currentPage === 'indkoeb' ? ' active' : '' ?>" href="<?= htmlspecialchars($buildPageUrl('indkoeb'), ENT_QUOTES, 'UTF-8') ?>" data-nav-target="shoppingSection">
-            <strong>🛒</strong>
+        <a class="nav-item active" href="#madplanSection" data-nav-target="madplanSection">
+            <strong>◉</strong>
+            <span>Madplan</span>
+        </a>
+        <a class="nav-item" href="#shoppingSection" data-nav-target="shoppingSection">
+            <strong>△</strong>
             <span>Indkøb</span>
+        </a>
+        <a class="nav-item" href="#settingsSection" data-nav-target="settingsSection">
+            <strong>⌂</strong>
+            <span>Opsætning</span>
         </a>
     </nav>
 </main>
 
 <script>
-let householdId = <?= json_encode($householdId, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-const currentPage = <?= json_encode($currentPage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const householdId = <?= json_encode($householdId, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 const params = new URLSearchParams(window.location.search);
 const queryAccessToken = params.get('access_token');
 
@@ -1649,10 +1280,6 @@ if (queryAccessToken) {
 
 let accessToken = queryAccessToken || window.localStorage.getItem('madAccessToken') || '';
 let deviceToken = params.get('device_token') || window.localStorage.getItem('madDeviceToken') || '';
-let isPlatformAdmin = false;
-let gateSending = false;
-let gateVerifying = false;
-let gateLastInitials = '';
 
 if (params.get('device_token')) {
     window.localStorage.setItem('madDeviceToken', params.get('device_token'));
@@ -1669,226 +1296,8 @@ function authHeaders(includeDeviceToken = false) {
     return headers;
 }
 
-function setGateStatus(message, isError = false) {
-    const el = document.getElementById('gateStatus');
-    if (!el) {
-        return;
-    }
-    el.textContent = message;
-    el.classList.toggle('err', !!isError);
-}
-
-function setAdminOnlyVisibility(visible) {
-    document.querySelectorAll('.admin-only').forEach((el) => {
-        el.style.display = visible ? '' : 'none';
-    });
-}
-
-function syncActiveHousehold(me) {
-    const households = Array.isArray(me?.households) ? me.households : [];
-    if (!households.length) {
-        return;
-    }
-
-    const allowedIds = households.map((household) => Number(household.id)).filter((id) => id > 0);
-    if (!allowedIds.length) {
-        return;
-    }
-
-    const preferredId = Number(me?.active_household_id || 0);
-    const targetId = allowedIds.includes(householdId)
-        ? householdId
-        : (allowedIds.includes(preferredId) ? preferredId : allowedIds[0]);
-
-    householdId = targetId;
-
-    const labelEl = document.getElementById('householdLabel');
-    const chosen = households.find((household) => Number(household.id) === targetId);
-    if (labelEl) {
-        labelEl.textContent = chosen?.name ? String(chosen.name) : ('Husstand ' + targetId);
-    }
-}
-
-async function resolveSession() {
-    if (!accessToken) {
-        isPlatformAdmin = false;
-        setAdminOnlyVisibility(false);
-        return false;
-    }
-
-    try {
-        const me = await loadJson('api.php?endpoint=auth.me');
-        const user = me.user || {};
-        syncActiveHousehold(me);
-        isPlatformAdmin = !!user.is_platform_admin;
-        setAdminOnlyVisibility(isPlatformAdmin);
-        return true;
-    } catch (_e) {
-        accessToken = '';
-        window.localStorage.removeItem('madAccessToken');
-        isPlatformAdmin = false;
-        setAdminOnlyVisibility(false);
-        return false;
-    }
-}
-
-function lockApp() {
-    const gate = document.getElementById('authGate');
-    const app = document.getElementById('top');
-    document.body.classList.remove('auth-pending');
-    if (gate) {
-        gate.classList.remove('hidden');
-    }
-    if (app) {
-        app.setAttribute('aria-hidden', 'true');
-    }
-}
-
-function unlockApp() {
-    const gate = document.getElementById('authGate');
-    const app = document.getElementById('top');
-    document.body.classList.remove('auth-pending');
-    if (gate) {
-        gate.classList.add('hidden');
-    }
-    if (app) {
-        app.setAttribute('aria-hidden', 'false');
-    }
-}
-
-async function requestGateCode() {
-    const initialsEl = document.getElementById('gateInitials');
-    const challengeEl = document.getElementById('gateChallenge');
-    if (!initialsEl || !challengeEl) {
-        return;
-    }
-
-    const initials = initialsEl.value.trim().toUpperCase();
-    initialsEl.value = initials;
-    if (!initials) {
-        setGateStatus('Skriv initialer for at modtage SMS-kode.', true);
-        return;
-    }
-    if (gateSending) {
-        return;
-    }
-    if (gateLastInitials === initials && challengeEl.value.trim() !== '') {
-        return;
-    }
-
-    gateSending = true;
-    gateLastInitials = initials;
-    setGateStatus('Sender SMS-kode...');
-    try {
-        const payload = await postJson('api.php?endpoint=auth.request_code', {initials}, {includeDeviceToken: false});
-        challengeEl.value = String(payload.challenge_id || '');
-        setGateStatus('SMS-kode sendt. Indtast de 6 cifre for at logge ind.');
-    } catch (error) {
-        gateLastInitials = '';
-        setGateStatus('Kunne ikke sende SMS-kode: ' + (error?.message || 'Ukendt fejl'), true);
-    }
-    gateSending = false;
-}
-
-async function verifyGateCode() {
-    const initialsEl = document.getElementById('gateInitials');
-    const challengeEl = document.getElementById('gateChallenge');
-    const codeEl = document.getElementById('gateCode');
-    if (!initialsEl || !challengeEl || !codeEl) {
-        return;
-    }
-
-    codeEl.value = codeEl.value.replace(/\D+/g, '').slice(0, 6);
-    const initials = initialsEl.value.trim().toUpperCase();
-    const challengeId = challengeEl.value.trim();
-    const code = codeEl.value.trim();
-
-    if (!initials || !challengeId || code.length !== 6) {
-        return;
-    }
-    if (gateVerifying) {
-        return;
-    }
-
-    gateVerifying = true;
-    setGateStatus('Verificerer kode...');
-    try {
-        const payload = await postJson('api.php?endpoint=auth.verify_code', {
-            initials,
-            challenge_id: challengeId,
-            code,
-        }, {includeDeviceToken: false});
-
-        if (!payload.access_token) {
-            throw new Error('Manglende access token');
-        }
-
-        accessToken = payload.access_token;
-        window.localStorage.setItem('madAccessToken', accessToken);
-
-        const ok = await resolveSession();
-        if (!ok) {
-            throw new Error('Session kunne ikke valideres');
-        }
-
-        unlockApp();
-        refresh();
-        setGateStatus('Logget ind.');
-    } catch (error) {
-        setGateStatus('Login fejlede: ' + (error?.message || 'Ukendt fejl'), true);
-        codeEl.value = '';
-    }
-    gateVerifying = false;
-}
-
-function initAuthGate() {
-    const initialsEl = document.getElementById('gateInitials');
-    const codeEl = document.getElementById('gateCode');
-    if (!initialsEl || !codeEl) {
-        return;
-    }
-
-    initialsEl.addEventListener('blur', requestGateCode);
-    initialsEl.addEventListener('change', requestGateCode);
-    initialsEl.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            requestGateCode();
-        }
-    });
-
-    codeEl.addEventListener('input', verifyGateCode);
-}
-
-async function enforceAuthGate() {
-    setAdminOnlyVisibility(false);
-    const ok = await resolveSession();
-    if (ok) {
-        unlockApp();
-        return;
-    }
-    lockApp();
-}
-
-function resolveApiUrl(url) {
-    if (!/^api\.php(\?|$)/.test(String(url))) {
-        return url;
-    }
-
-    const suffix = String(url).slice('api.php'.length);
-    const path = String(window.location.pathname || '');
-
-    if (path.includes('/public/')) {
-        return '../api.php' + suffix;
-    }
-    if (path.startsWith('/mad/')) {
-        return 'api.php' + suffix;
-    }
-    return '/mad/api.php' + suffix;
-}
-
 async function loadJson(url) {
-    const res = await fetch(resolveApiUrl(url), {
+    const res = await fetch(url, {
         cache: 'no-store',
         headers: authHeaders(),
     });
@@ -1904,7 +1313,7 @@ async function postJson(url, body, options = {}) {
         ...authHeaders(!!options.includeDeviceToken),
     };
 
-    const res = await fetch(resolveApiUrl(url), {
+    const res = await fetch(url, {
         method: 'POST',
         cache: 'no-store',
         headers,
@@ -1917,20 +1326,6 @@ async function postJson(url, body, options = {}) {
         throw new Error(`HTTP ${res.status}${details}`);
     }
     return payload;
-}
-
-function formatConnectionError(error) {
-    const message = String(error?.message || '').trim();
-    if (!message) {
-        return 'ukendt fejl';
-    }
-    if (/^HTTP\s+\d+/i.test(message)) {
-        return message;
-    }
-    if (/failed to fetch|networkerror|network error/i.test(message)) {
-        return 'netvaerksfejl';
-    }
-    return message.length > 80 ? message.slice(0, 80) + '…' : message;
 }
 
 function esc(v) {
@@ -1956,56 +1351,6 @@ function formatNutritionValue(value, unit = 'g') {
         return `${numeric} ${unit}`;
     }
     return `${numeric.toFixed(1)} ${unit}`;
-}
-
-function formatDkk(value) {
-    const numeric = Number(value);
-    if (Number.isNaN(numeric)) {
-        return '–';
-    }
-    return new Intl.NumberFormat('da-DK', {style: 'currency', currency: 'DKK'}).format(numeric);
-}
-
-function formatDateDa(value) {
-    if (!value) {
-        return '';
-    }
-    const date = new Date(value + 'T00:00:00');
-    if (Number.isNaN(date.getTime())) {
-        return String(value);
-    }
-    return date.toLocaleDateString('da-DK');
-}
-
-function productTypeLabel(type) {
-    const map = {
-        'tørvare': 'Tørvare',
-        'ferskvare': 'Ferskvare',
-        'mejeri': 'Mejeri',
-        'kød': 'Kød',
-        'fisk': 'Fisk & skaldyr',
-        'frugt_groent': 'Frugt & grønt',
-        'frostvare': 'Frostvare',
-        'krydderier': 'Krydderier',
-        'drikke': 'Drikke',
-        'konserves': 'Konserves',
-        'brød': 'Brød',
-        'andet': 'Andet',
-    };
-    return map[String(type || '')] || String(type || 'Andet');
-}
-
-function locationTypeIcon(locType) {
-    if (locType === 'fridge') {
-        return '❄';
-    }
-    if (locType === 'freezer') {
-        return '🧊';
-    }
-    if (locType === 'counter') {
-        return '🍎';
-    }
-    return '📦';
 }
 
 function nutritionForProduct(product) {
@@ -2049,14 +1394,6 @@ function renderProducts(products) {
         const state = stateForProduct(product);
         const nutrition = nutritionForProduct(product);
         const image = product.image_url ? `<img class="inventory-image" src="${esc(product.image_url)}" alt="${esc(product.name || 'Varebillede')}">` : `<div class="inventory-image-fallback">${esc((product.name || 'M').slice(0, 1).toUpperCase())}</div>`;
-        const hasStandardPrice = product.standard_price !== null && product.standard_price !== undefined && product.standard_price !== '';
-        const hasOfferPrice = product.offer_price !== null && product.offer_price !== undefined && product.offer_price !== '';
-        const priceStrip = (hasStandardPrice || hasOfferPrice)
-            ? `<div class="nutrition-strip">
-                ${hasStandardPrice ? `<div class="nutrition-chip"><strong>${esc(formatDkk(product.standard_price))}</strong><span>Standard ${esc(product.standard_store || '')}</span></div>` : ''}
-                ${hasOfferPrice ? `<div class="nutrition-chip"><strong>${esc(formatDkk(product.offer_price))}</strong><span>Tilbud ${esc(product.offer_store || '')}${product.offer_valid_to ? ' til ' + esc(formatDateDa(product.offer_valid_to)) : ''}</span></div>` : ''}
-            </div>`
-            : '<div class="nutrition-note">Ingen prisdata endnu. Tilføj standardpris eller tilbud i formularen ovenfor.</div>';
         const nutritionStrip = nutrition ? `<div class="nutrition-strip">
                 <div class="nutrition-chip">
                     <strong>${esc(formatNutritionValue(nutrition.energy_kcal, 'kcal'))}</strong>
@@ -2072,12 +1409,6 @@ function renderProducts(products) {
                 </div>
             </div>
             <div class="nutrition-note">Næringsoplysninger pr. ${esc(nutrition.per || '100g')}.</div>` : '<div class="nutrition-note">Næringsoplysninger kommer ind, når varen er beriget fra maddatabasen.</div>';
-        const typeBadge = product.product_type && product.product_type !== 'andet'
-            ? `<span class="type-badge">${esc(productTypeLabel(product.product_type))}</span>`
-            : '';
-        const locationBadge = product.location_name
-            ? `<span class="location-badge">${esc(locationTypeIcon(product.location_type))} ${esc(product.location_name)}</span>`
-            : '';
         return `<article class="inventory-card">
             <div class="inventory-visual">
                 ${image}
@@ -2085,11 +1416,11 @@ function renderProducts(products) {
                     <div class="inventory-top">
                         <div>
                             <h3 class="inventory-name">${esc(product.name || 'Ukendt vare')}</h3>
-                            <p class="inventory-brand">${esc(product.brand || '')}</p>
+                            <p class="inventory-brand">${esc(product.brand || 'Ukendt brand')}</p>
                         </div>
                         <span class="state-badge ${state.className}">${esc(state.label)}</span>
                     </div>
-                    <div class="inventory-badges">${typeBadge}${locationBadge}</div>
+                    <p class="inventory-code">Fødevarekort med lagerstatus og ernæring.</p>
                 </div>
             </div>
             <div class="inventory-meta">
@@ -2102,7 +1433,6 @@ function renderProducts(products) {
                     <div class="meta-value">${esc(formatQuantity(product.minimum_quantity ?? 0))}</div>
                 </div>
             </div>
-            ${priceStrip}
             ${nutritionStrip}
         </article>`;
     }).join('');
@@ -2141,556 +1471,16 @@ function renderScans(scans) {
     }).join('');
 }
 
-function renderShoppingCandidates(items) {
-    const body = document.getElementById('shoppingBody');
-    if (!body) {
-        return;
-    }
-
-    if (!Array.isArray(items) || !items.length) {
-        body.innerHTML = '<div class="empty">Ingen aktuelle indkøbskandidater. Når minimum rammes, eller en vare tilføjes manuelt, vises den her.</div>';
-        return;
-    }
-
-    body.innerHTML = items.map(item => {
-        const hasOffer = !!item.has_offer && item.offer_price !== null && item.offer_price !== undefined;
-        const offerLine = hasOffer
-            ? `<div class="nutrition-strip"><div class="nutrition-chip"><strong>${esc(formatDkk(item.offer_price))}</strong><span>Tilbud hos ${esc(item.offer_store || 'ukendt butik')}${item.offer_valid_to ? ' til ' + esc(formatDateDa(item.offer_valid_to)) : ''}</span></div></div>`
-            : '<div class="nutrition-note">Ingen aktivt tilbud fundet endnu.</div>';
-        const brandLine = item.brand ? `<p class="inventory-brand">${esc(item.brand)}</p>` : '';
-        const typeBadge = item.product_type && item.product_type !== 'andet'
-            ? `<span class="type-badge">${esc(productTypeLabel(item.product_type))}</span>`
-            : '';
-
-        return `<article class="inventory-card">
-            <div class="inventory-top">
-                <div>
-                    <h3 class="inventory-name">${esc(item.product_name || 'Ukendt vare')}</h3>
-                    ${brandLine}
-                </div>
-                <span class="state-badge ${hasOffer ? 'state-ok' : 'state-low'}">${hasOffer ? 'Tilbud fundet' : 'Mangler tilbud'}</span>
-            </div>
-            <div class="inventory-badges">${typeBadge}</div>
-            <div class="inventory-meta">
-                <div class="meta-block">
-                    <span class="meta-label">Behov</span>
-                    <div class="meta-value">${esc(formatQuantity(item.needed_quantity ?? 1))}</div>
-                </div>
-                <div class="meta-block">
-                    <span class="meta-label">Årsag</span>
-                    <div class="meta-value">${esc(item.trigger_reason || 'Ukendt')}</div>
-                </div>
-            </div>
-            ${offerLine}
-        </article>`;
-    }).join('');
-}
-
-function renderShoppingList(items, shoppingList = null) {
-    const body = document.getElementById('shoppingBody');
-    if (!body) {
-        return;
-    }
-
-    if (!Array.isArray(items) || !items.length) {
-        body.innerHTML = '<div class="empty">Ingen aktiv indkøbsseddel endnu. Tilføj varer fra tilbud eller lad lave beholdninger opbygge næste liste.</div>';
-        return;
-    }
-
-    const flowOrder = {
-        frugt_groent: 0,
-        ferskvare: 1,
-        mejeri: 2,
-        kød: 3,
-        fisk: 4,
-        brød: 5,
-        frostvare: 6,
-        konserves: 7,
-        tørvare: 8,
-        krydderier: 9,
-        drikke: 10,
-        andet: 11,
-    };
-
-    const storeGroups = new Map();
-    for (const item of items) {
-        const storeName = String(item?.preferred_store || '').trim() || 'Uden butik';
-        if (!storeGroups.has(storeName)) {
-            storeGroups.set(storeName, []);
-        }
-        storeGroups.get(storeName).push(item);
-    }
-
-    const sortedStores = Array.from(storeGroups.keys()).sort((a, b) => {
-        const aNoStore = a === 'Uden butik';
-        const bNoStore = b === 'Uden butik';
-        if (aNoStore !== bNoStore) {
-            return aNoStore ? 1 : -1;
-        }
-        return a.localeCompare(b, 'da');
-    });
-
-    const listTitle = shoppingList?.title ? `<div class="nutrition-note" style="margin-bottom: 8px;">${esc(shoppingList.title)}</div>` : '';
-
-    const groupsHtml = sortedStores.map(storeName => {
-        const groupItems = (storeGroups.get(storeName) || []).slice().sort((a, b) => {
-            const aChecked = !!a?.is_checked;
-            const bChecked = !!b?.is_checked;
-            if (aChecked !== bChecked) {
-                return aChecked ? 1 : -1;
-            }
-
-            const aType = String(a?.product_type || 'andet');
-            const bType = String(b?.product_type || 'andet');
-            const aRank = Object.prototype.hasOwnProperty.call(flowOrder, aType) ? flowOrder[aType] : 99;
-            const bRank = Object.prototype.hasOwnProperty.call(flowOrder, bType) ? flowOrder[bType] : 99;
-            if (aRank !== bRank) {
-                return aRank - bRank;
-            }
-
-            return String(a?.product_name || '').localeCompare(String(b?.product_name || ''), 'da');
-        });
-
-        const rowsHtml = groupItems.map(item => {
-            const typeText = productTypeLabel(item?.product_type || 'andet');
-            const metaParts = [typeText];
-            if (item?.brand) {
-                metaParts.push(String(item.brand));
-            }
-            if (item?.is_checked) {
-                metaParts.push('Afkrydset');
-            }
-
-            return `<li class="shopping-row${item?.is_checked ? ' checked' : ''}">
-                <div class="shopping-row-main">
-                    <p class="shopping-name">${esc(item?.product_name || 'Ukendt vare')}</p>
-                    <p class="shopping-meta">${esc(metaParts.join(' · '))}</p>
-                </div>
-                <span class="shopping-qty">${esc(formatQuantity(item?.quantity ?? 1))}</span>
-            </li>`;
-        }).join('');
-
-        return `<section class="shopping-store-group">
-            <header class="shopping-store-head">
-                <span>${esc(storeName)}</span>
-                <span class="shopping-store-count">${groupItems.length} varer</span>
-            </header>
-            <ul class="shopping-list">
-                ${rowsHtml}
-            </ul>
-        </section>`;
-    }).join('');
-
-    body.innerHTML = `${listTitle}<div class="shopping-compact">${groupsHtml}</div>`;
-}
-
-function renderOfferHighlights(items) {
-    const body = document.getElementById('offersBody');
-    if (!body) {
-        return;
-    }
-
-    const offers = (Array.isArray(items) ? items : [])
-        .filter(item => !!item.has_offer && item.offer_price !== null && item.offer_price !== undefined)
-        .sort((a, b) => Number(a.offer_price) - Number(b.offer_price));
-
-    if (!offers.length) {
-        body.innerHTML = '<div class="empty">Ingen aktive tilbud fundet på dine aktuelle mangler endnu.</div>';
-        return;
-    }
-
-    body.innerHTML = offers.map(item => {
-        const brandLine = item.brand ? `<p class="inventory-brand">${esc(item.brand)}</p>` : '';
-        const validLine = item.offer_valid_to ? `Gyldig til ${esc(formatDateDa(item.offer_valid_to))}` : 'Gyldighed ikke oplyst';
-        return `<article class="inventory-card">
-            <div class="inventory-top">
-                <div>
-                    <h3 class="inventory-name">${esc(item.product_name || 'Ukendt vare')}</h3>
-                    ${brandLine}
-                </div>
-                <span class="state-badge state-ok">Tilbud</span>
-            </div>
-            <div class="nutrition-strip">
-                <div class="nutrition-chip">
-                    <strong>${esc(formatDkk(item.offer_price))}</strong>
-                    <span>Pris</span>
-                </div>
-                <div class="nutrition-chip">
-                    <strong>${esc(item.offer_store || 'Ukendt')}</strong>
-                    <span>Butik</span>
-                </div>
-                <div class="nutrition-chip">
-                    <strong>${esc(formatQuantity(item.needed_quantity ?? 1))}</strong>
-                    <span>Behov</span>
-                </div>
-            </div>
-            <div class="nutrition-note">${validLine}</div>
-        </article>`;
-    }).join('');
-}
-
-function normalizeSearchText(value) {
-    return String(value || '')
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9\s]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-}
-
-function levenshteinDistance(a, b) {
-    const s = String(a || '');
-    const t = String(b || '');
-    const m = s.length;
-    const n = t.length;
-
-    if (m === 0) {
-        return n;
-    }
-    if (n === 0) {
-        return m;
-    }
-
-    const dp = Array.from({length: m + 1}, () => new Array(n + 1).fill(0));
-    for (let i = 0; i <= m; i++) {
-        dp[i][0] = i;
-    }
-    for (let j = 0; j <= n; j++) {
-        dp[0][j] = j;
-    }
-
-    for (let i = 1; i <= m; i++) {
-        for (let j = 1; j <= n; j++) {
-            const cost = s[i - 1] === t[j - 1] ? 0 : 1;
-            dp[i][j] = Math.min(
-                dp[i - 1][j] + 1,
-                dp[i][j - 1] + 1,
-                dp[i - 1][j - 1] + cost
-            );
-        }
-    }
-
-    return dp[m][n];
-}
-
-function matchesSearchQuery(text, query) {
-    const q = normalizeSearchText(query);
-    if (!q) {
-        return true;
-    }
-
-    const haystack = normalizeSearchText(text);
-    if (!haystack) {
-        return false;
-    }
-
-    if (haystack.includes(q)) {
-        return true;
-    }
-
-    const words = haystack.split(' ').filter(Boolean);
-    if (words.some(word => word.startsWith(q))) {
-        return true;
-    }
-
-    if (q.length >= 4) {
-        return words.some(word => {
-            if (Math.abs(word.length - q.length) > 1) {
-                return false;
-            }
-            return levenshteinDistance(word, q) <= 1;
-        });
-    }
-
-    return false;
-}
-
-function renderLeafletOfferFeed(items, suggestionSourceItems = null) {
-    const body = document.getElementById('leafletOffersBody');
-    if (!body) {
-        return;
-    }
-
-    const offers = Array.isArray(items) ? items : [];
-    const suggestionOffers = Array.isArray(suggestionSourceItems) ? suggestionSourceItems : offers;
-    attachLeafletOfferHandlers(offers, suggestionOffers);
-
-    if (!offers.length) {
-        body.innerHTML = '<div class="empty">Ingen varer fundet i tilbudsaviser endnu.</div>';
-        return;
-    }
-
-    // Group offers by store
-    const storeGroups = {};
-    offers.forEach(item => {
-        const storeName = item.store_name || 'Ukendt butik';
-        if (!storeGroups[storeName]) {
-            storeGroups[storeName] = [];
-        }
-        storeGroups[storeName].push(item);
-    });
-
-    // Sort stores alphabetically
-    const sortedStores = Object.keys(storeGroups).sort();
-
-    const groupsHtml = sortedStores.map(storeName => {
-        const storeOffers = storeGroups[storeName];
-        const offersHtml = storeOffers.map(item => {
-            const validLine = item.valid_to ? `Gyldig til ${esc(formatDateDa(item.valid_to))}` : 'Gyldighed ikke oplyst';
-            const matchedBadge = item.is_catalog_matched
-                ? '<span class="state-badge state-ok">Matchet</span>'
-                : '<span class="state-badge state-low">Ikke matchet</span>';
-
-            return `<article class="leaflet-offer-card inventory-card" data-offer-id="${esc(item.id || '')}" style="position: relative;">
-                <div style="position: absolute; top: 12px; right: 12px;">
-                    <input type="checkbox" class="leaflet-offer-checkbox" data-offer-id="${esc(item.id || '')}" data-title="${esc(item.product_name || 'Ukendt vare')}" data-store="${esc(item.store_name || '')}" />
-                </div>
-                <div class="inventory-top">
-                    <div>
-                        <h3 class="inventory-name">${esc(item.product_name || 'Ukendt vare')}</h3>
-                        <p class="inventory-brand">${esc(item.store_name || 'Ukendt butik')}</p>
-                    </div>
-                    ${matchedBadge}
-                </div>
-                <div class="nutrition-strip">
-                    <div class="nutrition-chip">
-                        <strong>${esc(formatDkk(item.price))}</strong>
-                        <span>Pris</span>
-                    </div>
-                    <div class="nutrition-chip">
-                        <strong>${esc(item.store_name || 'Ukendt')}</strong>
-                        <span>Butik</span>
-                    </div>
-                    <div class="nutrition-chip">
-                        <strong>${esc(item.is_catalog_matched ? 'Ja' : 'Nej')}</strong>
-                        <span>I katalog</span>
-                    </div>
-                </div>
-                <div class="nutrition-note">${validLine}</div>
-            </article>`;
-        }).join('');
-
-        return `<div class="store-group" data-store="${esc(storeName)}">
-            <h3 style="padding: 12px 0 8px 0; margin: 0; font-size: 16px; font-weight: 700; color: var(--accent); border-bottom: 2px solid var(--line);">${esc(storeName)}</h3>
-            <div class="inventory-grid" style="margin-top: 12px;">
-                ${offersHtml}
-            </div>
-        </div>`;
-    }).join('');
-
-    body.innerHTML = groupsHtml;
-}
-
-function attachLeafletOfferHandlers(offers, suggestionOffers = null) {
-    const searchInput = document.getElementById('leafletOffersSearch');
-    const addBtn = document.getElementById('leafletOffersAddBtn');
-    const body = document.getElementById('leafletOffersBody');
-    const suggestions = document.getElementById('leafletOfferSuggestions');
-    const offerItems = Array.isArray(offers) ? offers : [];
-    const offerItemsForSuggestions = Array.isArray(suggestionOffers) ? suggestionOffers : offerItems;
-
-    if (!body) {
-        return;
-    }
-
-    function renderSuggestions(query) {
-        if (!suggestions) {
-            return;
-        }
-
-        const normalized = String(query || '').trim().toLowerCase();
-        if (!normalized) {
-            suggestions.style.display = 'none';
-            suggestions.innerHTML = '';
-            return;
-        }
-
-        const matches = offerItemsForSuggestions
-            .filter(item => {
-                const title = String(item?.product_name || '');
-                const store = String(item?.store_name || '');
-                return matchesSearchQuery(title, normalized) || matchesSearchQuery(store, normalized);
-            })
-            .slice(0, 8);
-
-        if (!matches.length) {
-            suggestions.style.display = '';
-            suggestions.innerHTML = '<div style="padding:10px 12px; color: var(--muted);">Ingen forslag fundet</div>';
-            return;
-        }
-
-        suggestions.style.display = '';
-        suggestions.innerHTML = matches.map(item => `
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border-top:1px solid var(--line);">
-                <div>
-                    <div style="font-weight:700; font-size:14px;">${esc(item.product_name || 'Ukendt vare')}</div>
-                    <div style="font-size:12px; color: var(--muted);">${esc(item.store_name || 'Ukendt butik')} · ${esc(formatDkk(item.price))}</div>
-                </div>
-                <button class="leaflet-suggestion-add" data-title="${esc(item.product_name || 'Ukendt vare')}" data-store="${esc(item.store_name || '')}" style="padding:6px 10px; border-radius:10px; background: var(--accent); color:white; border:none; cursor:pointer; font-weight:700; white-space:nowrap;">Tilføj</button>
-            </div>
-        `).join('');
-    }
-
-    if (searchInput) {
-        searchInput.oninput = (e) => {
-            const query = e.target.value.toLowerCase();
-            renderSuggestions(query);
-
-            const cards = body.querySelectorAll('.leaflet-offer-card');
-            cards.forEach(card => {
-                const title = card.querySelector('.inventory-name')?.textContent || '';
-                const store = card.querySelector('.inventory-brand')?.textContent || '';
-                const matches = matchesSearchQuery(title, query);
-                const storeMatches = matchesSearchQuery(store, query);
-                card.style.display = (matches || storeMatches) ? '' : 'none';
-            });
-
-            const groups = body.querySelectorAll('.store-group');
-            groups.forEach(group => {
-                const visibleCards = group.querySelectorAll('.leaflet-offer-card:not([style*="display: none"])').length;
-                group.style.display = visibleCards > 0 ? '' : 'none';
-            });
-        };
-
-        searchInput.onblur = () => {
-            setTimeout(() => {
-                if (suggestions) {
-                    suggestions.style.display = 'none';
-                }
-            }, 180);
-        };
-
-        searchInput.onfocus = () => {
-            renderSuggestions(searchInput.value || '');
-        };
-    }
-
-    if (suggestions) {
-        suggestions.onclick = async (event) => {
-            const target = event.target;
-            if (!(target instanceof HTMLElement) || !target.classList.contains('leaflet-suggestion-add')) {
-                return;
-            }
-
-            const title = target.dataset.title || '';
-            const store = target.dataset.store || '';
-            if (!title) {
-                return;
-            }
-
-            try {
-                await addLeafletOffersToShopping([{title, store}]);
-                alert('1 vare tilføjet til indkøbsseddel');
-                await refresh();
-            } catch (e) {
-                alert('Fejl ved tilføjelse: ' + e.message);
-            }
-        };
-    }
-
-    if (addBtn) {
-        addBtn.onclick = async () => {
-            const checkboxes = body.querySelectorAll('.leaflet-offer-checkbox:checked');
-            if (!checkboxes.length) {
-                alert('Vælg mindst en vare at tilføje');
-                return;
-            }
-
-            const items = Array.from(checkboxes).map(cb => ({
-                title: cb.dataset.title,
-                offerId: cb.dataset.offerId,
-                store: cb.dataset.store
-            }));
-
-            try {
-                const result = await addLeafletOffersToShopping(items);
-                if (result) {
-                    alert(`${items.length} vare(r) tilføjet til indkøbsseddel`);
-                    // Clear checkboxes
-                    checkboxes.forEach(cb => cb.checked = false);
-                    await refresh();
-                }
-            } catch (e) {
-                alert('Fejl ved tilføjelse: ' + e.message);
-            }
-        };
-    }
-}
-
-async function addLeafletOffersToShopping(items) {
-    try {
-        const targetHouseholdId = Number(householdId || 0) > 0 ? String(householdId) : '1';
-        await postJson(`api.php?endpoint=shopping.list.add_items&household_id=${encodeURIComponent(targetHouseholdId)}`, {
-            items,
-        });
-        return true;
-    } catch (e) {
-        console.error('Error adding items:', e);
-        throw e;
-    }
-}
-
 function setActiveNav(targetId) {
     document.querySelectorAll('[data-nav-target]').forEach(link => {
         link.classList.toggle('active', link.dataset.navTarget === targetId);
     });
 }
 
-function setVisible(id, visible) {
-    const el = document.getElementById(id);
-    if (!el) {
-        return;
-    }
-    el.style.display = visible ? '' : 'none';
-}
-
-function applyTraditionalPage(page) {
-    const layout = document.getElementById('mainLayout');
-    const showOverview = page === 'overblik';
-
-    setVisible('overviewContext', showOverview);
-    setVisible('overviewHero', showOverview);
-    setVisible('overviewStats', showOverview);
-
-    setVisible('madplanSection', page === 'madplan');
-    setVisible('recipesSection', page === 'opskrifter');
-    setVisible('inventorySection', page === 'lager');
-    setVisible('activitySection', page === 'lager');
-    setVisible('shoppingSection', page === 'indkoeb');
-    setVisible('settingsSection', page === 'opsaetning');
-
-    if (layout) {
-        layout.classList.toggle('single-page', page !== 'overblik');
-        layout.style.display = page === 'overblik' ? 'none' : '';
-    }
-}
-
 function updateNavFromHash() {
     const hash = window.location.hash.replace('#', '');
-    const pageTargetMap = {
-        overblik: 'top',
-        madplan: 'madplanSection',
-        opskrifter: 'recipesSection',
-        lager: 'inventorySection',
-        indkoeb: 'shoppingSection',
-        opsaetning: 'settingsSection',
-    };
-    const targetPageMap = {
-        top: 'overblik',
-        madplanSection: 'madplan',
-        recipesSection: 'opskrifter',
-        inventorySection: 'lager',
-        shoppingSection: 'indkoeb',
-        settingsSection: 'opsaetning',
-    };
-    const fallback = pageTargetMap[String(currentPage || '')] || 'top';
+    const fallback = 'madplanSection';
     const targetId = hash || fallback;
-
-    const forcedPage = targetPageMap[targetId];
-    if (forcedPage) {
-        applyTraditionalPage(forcedPage);
-    }
 
     if (document.getElementById(targetId)) {
         setActiveNav(targetId);
@@ -2729,189 +1519,6 @@ function setAdminStatus(message) {
     const el = document.getElementById('adminStatus');
     if (el) {
         el.textContent = message;
-    }
-}
-
-function setIngredientStatus(message, isError = false) {
-    const el = document.getElementById('ingredientCreateStatus');
-    if (!el) {
-        return;
-    }
-    el.textContent = message;
-    el.classList.toggle('err', !!isError);
-}
-
-function ingredientFormValues() {
-    return {
-        name: document.getElementById('ingredientName')?.value.trim() || '',
-        barcode: document.getElementById('ingredientBarcode')?.value.trim() || '',
-        brand: document.getElementById('ingredientBrand')?.value.trim() || '',
-        image_url: document.getElementById('ingredientImageUrl')?.value.trim() || '',
-        product_type: document.getElementById('ingredientProductType')?.value || 'andet',
-        location_id: document.getElementById('ingredientLocationId')?.value || '',
-        quantity: document.getElementById('ingredientQuantity')?.value.trim() || '',
-        minimum_quantity: document.getElementById('ingredientMinimum')?.value.trim() || '',
-        store_name: document.getElementById('ingredientStore')?.value.trim() || '',
-        price: document.getElementById('ingredientPrice')?.value.trim() || '',
-        offer_store: document.getElementById('ingredientOfferStore')?.value.trim() || '',
-        offer_price: document.getElementById('ingredientOfferPrice')?.value.trim() || '',
-        offer_valid_to: document.getElementById('ingredientOfferValidTo')?.value.trim() || '',
-    };
-}
-
-function fillIngredientFieldsFromLookup(product) {
-    if (!product || typeof product !== 'object') {
-        return;
-    }
-
-    const nameEl = document.getElementById('ingredientName');
-    const brandEl = document.getElementById('ingredientBrand');
-    const imageEl = document.getElementById('ingredientImageUrl');
-    const typeEl = document.getElementById('ingredientProductType');
-
-    if (nameEl && !nameEl.value.trim() && product.name) {
-        nameEl.value = String(product.name);
-    }
-    if (brandEl && !brandEl.value.trim() && product.brand) {
-        brandEl.value = String(product.brand);
-    }
-    if (imageEl && !imageEl.value.trim() && product.image_url) {
-        imageEl.value = String(product.image_url);
-    }
-    if (typeEl && product.product_type && product.product_type !== 'andet') {
-        typeEl.value = String(product.product_type);
-    }
-
-    // Show AI note + estimated shelf days as a status hint
-    const parts = [];
-    if (product.ai_note) {
-        parts.push(product.ai_note);
-    }
-    if (product.estimated_shelf_days) {
-        parts.push(`Typisk holdbarhed: ~${product.estimated_shelf_days} dage fra køb.`);
-    }
-    if (parts.length) {
-        setIngredientStatus('AI: ' + parts.join(' '));
-    }
-}
-
-async function lookupIngredientFromBarcode() {
-    if (!accessToken) {
-        setIngredientStatus('Log ind for at kunne slå ingredienser op.', true);
-        return;
-    }
-
-    const barcode = document.getElementById('ingredientBarcode')?.value.trim() || '';
-    if (!barcode) {
-        setIngredientStatus('Skriv en barcode først.', true);
-        return;
-    }
-
-    setIngredientStatus('Slår op i varedatabase...');
-    try {
-        const payload = await loadJson(`api.php?endpoint=ingredients.lookup&household_id=${encodeURIComponent(householdId)}&barcode=${encodeURIComponent(barcode)}`);
-        fillIngredientFieldsFromLookup(payload.product || null);
-        setIngredientStatus('Opslag gennemført. Felter er udfyldt med data fra databasen.');
-    } catch (error) {
-        setIngredientStatus('Kunne ikke finde barcode: ' + (error?.message || 'Ukendt fejl'), true);
-    }
-}
-
-async function createIngredientFromForm() {
-    if (!accessToken) {
-        setIngredientStatus('Log ind for at oprette ingredienser.', true);
-        return;
-    }
-
-    const values = ingredientFormValues();
-    if (!values.name && !values.barcode) {
-        setIngredientStatus('Angiv mindst navn eller barcode.', true);
-        return;
-    }
-
-    setIngredientStatus('Opretter ingrediens...');
-    try {
-        const payload = await postJson('api.php?endpoint=ingredients.create', {
-            household_id: householdId,
-            name: values.name,
-            barcode: values.barcode,
-            brand: values.brand,
-            image_url: values.image_url,
-            product_type: values.product_type,
-            location_id: values.location_id !== '' ? Number(values.location_id) : undefined,
-            quantity: values.quantity,
-            minimum_quantity: values.minimum_quantity,
-            store_name: values.store_name,
-            price: values.price,
-            offer_store: values.offer_store,
-            offer_price: values.offer_price,
-            offer_valid_to: values.offer_valid_to,
-        });
-
-        setIngredientStatus('Ingrediens oprettet: ' + (payload?.ingredient?.name || values.name || values.barcode));
-        document.getElementById('ingredientCreateDetails')?.removeAttribute('open');
-        refresh();
-    } catch (error) {
-        setIngredientStatus('Kunne ikke oprette ingrediens: ' + (error?.message || 'Ukendt fejl'), true);
-    }
-}
-
-async function loadIngredientLocations() {
-    if (!accessToken) {
-        return;
-    }
-
-    try {
-        const payload = await loadJson(`api.php?endpoint=locations&household_id=${encodeURIComponent(householdId)}`);
-        const locations = Array.isArray(payload.locations) ? payload.locations : [];
-        const select = document.getElementById('ingredientLocationId');
-        if (!select) {
-            return;
-        }
-
-        if (!locations.length) {
-            select.innerHTML = '<option value="">Ingen lokationer fundet</option>';
-            return;
-        }
-
-        const typeIcon = {'dry': '📦', 'fridge': '❄', 'freezer': '🧊', 'counter': '🍎', 'other': '🔵'};
-        select.innerHTML = locations.map(loc => {
-            const icon = typeIcon[loc.location_type] || '📦';
-            return `<option value="${esc(String(loc.id))}">${icon} ${esc(loc.name)}</option>`;
-        }).join('');
-    } catch (_e) {
-        // Lokationer er valgfrie at indlæse - fejl er ikke kritisk
-    }
-}
-
-function initIngredientTools() {
-    const lookupBtn = document.getElementById('ingredientLookupBtn');
-    const createBtn = document.getElementById('ingredientCreateBtn');
-    const barcodeInput = document.getElementById('ingredientBarcode');
-    const panel = document.getElementById('ingredientCreateDetails');
-
-    if (lookupBtn) {
-        lookupBtn.addEventListener('click', lookupIngredientFromBarcode);
-    }
-    if (createBtn) {
-        createBtn.addEventListener('click', createIngredientFromForm);
-    }
-    if (barcodeInput) {
-        barcodeInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                lookupIngredientFromBarcode();
-            }
-        });
-    }
-
-    // Hent lokationer når panelet åbnes for første gang
-    if (panel) {
-        panel.addEventListener('toggle', () => {
-            if (panel.open && accessToken) {
-                loadIngredientLocations();
-            }
-        }, {once: true});
     }
 }
 
@@ -3175,120 +1782,34 @@ async function refresh() {
     if (!accessToken) {
         document.getElementById('scansBody').innerHTML = '<div class="empty">Log ind for at se husstandens scanlog.</div>';
         document.getElementById('productsBody').innerHTML = '<div class="empty">Log ind for at se husstandens varer og lokationer.</div>';
-        const shoppingBody = document.getElementById('shoppingBody');
-        if (shoppingBody) {
-            shoppingBody.innerHTML = '<div class="empty">Log ind for at se indkøbskandidater.</div>';
-        }
-        const offersBody = document.getElementById('offersBody');
-        if (offersBody) {
-            offersBody.innerHTML = '<div class="empty">Log ind for at se tilbud.</div>';
-        }
-        const leafletOffersBody = document.getElementById('leafletOffersBody');
-        if (leafletOffersBody) {
-            leafletOffersBody.innerHTML = '<div class="empty">Log ind for at se varer fra tilbudsaviser.</div>';
-        }
-        const shoppingChip = document.getElementById('shoppingChip');
-        if (shoppingChip) {
-            shoppingChip.textContent = '0 på sedlen';
-        }
-        const offersChip = document.getElementById('offersChip');
-        if (offersChip) {
-            offersChip.textContent = '0 tilbud fundet';
-        }
-        const leafletOffersChip = document.getElementById('leafletOffersChip');
-        if (leafletOffersChip) {
-            leafletOffersChip.textContent = '0 fundet';
-        }
         document.getElementById('productSummary').textContent = 'Data er nu knyttet til den bruger og de husstande, du er tildelt.';
         document.getElementById('scanSummary').textContent = 'Scanlog vises kun for den aktive husstand efter login.';
         document.getElementById('heroSummaryMeta').textContent = 'Adgangen er nu husstands-styret. Hent et access token via login, og aabn siden med access_token i URL eller localStorage.';
-        syncStatus.textContent = 'Gaestetilstand';
+        syncStatus.textContent = 'Login paakraevet';
         return;
     }
 
     try {
-        let recent;
-        let products;
-        let shoppingList;
-        let shopping;
-        let offerFeed;
-
-        try {
-            recent = await loadJson(`api.php?endpoint=recent&limit=25&household_id=${encodeURIComponent(householdId)}`);
-        } catch (e) {
-            throw new Error('recent: ' + formatConnectionError(e));
-        }
-
-        try {
-            products = await loadJson(`api.php?endpoint=products&household_id=${encodeURIComponent(householdId)}`);
-        } catch (e) {
-            throw new Error('products: ' + formatConnectionError(e));
-        }
-
-        try {
-            shoppingList = await loadJson(`api.php?endpoint=shopping.list&household_id=${encodeURIComponent(householdId)}`);
-        } catch (e) {
-            throw new Error('shopping.list: ' + formatConnectionError(e));
-        }
-
-        try {
-            shopping = await loadJson(`api.php?endpoint=shopping.candidates&household_id=${encodeURIComponent(householdId)}`);
-        } catch (e) {
-            throw new Error('shopping.candidates: ' + formatConnectionError(e));
-        }
-
-        try {
-            offerFeed = await loadJson('api.php?endpoint=shopping.offer_feed&limit=500');
-        } catch (e) {
-            throw new Error('shopping.offer_feed: ' + formatConnectionError(e));
-        }
+        const [recent, products] = await Promise.all([
+            loadJson(`api.php?endpoint=recent&limit=25&household_id=${encodeURIComponent(householdId)}`),
+            loadJson(`api.php?endpoint=products&household_id=${encodeURIComponent(householdId)}`)
+        ]);
 
         const scans = recent.scans || [];
         const productList = products.products || [];
         const lowStock = productList.filter(product => Number(product.quantity ?? 0) <= Number(product.minimum_quantity ?? 0)).length;
         const latest = scans[0] || null;
         const balanced = Math.max(productList.length - lowStock, 0);
-        const leafletOffersWithoutNetto = (offerFeed.items || []).filter(item => {
-            const storeName = String(item?.store_name || '').trim().toLowerCase();
-            return storeName !== 'netto'
-                && storeName !== 'kvickly'
-                && storeName !== '365discount'
-                && storeName !== '365 discount'
-                && storeName !== '365';
-        });
-
-        const shoppingListItems = Array.isArray(shoppingList.items) ? shoppingList.items : [];
-        const shoppingCandidateItems = Array.isArray(shopping.items) ? shopping.items : [];
 
         renderScans(scans);
         renderProducts(productList);
-        if (shoppingListItems.length > 0) {
-            renderShoppingList(shoppingListItems, shoppingList.list || null);
-        } else {
-            // Fallback to candidate view so users still see actionable items before first manual add.
-            renderShoppingCandidates(shoppingCandidateItems);
-        }
-        renderOfferHighlights(shopping.items || []);
-        renderLeafletOfferFeed(leafletOffersWithoutNetto, offerFeed.items || []);
 
         document.getElementById('scanCount').textContent = String(scans.length);
         document.getElementById('productCount').textContent = String(productList.length);
         document.getElementById('lowStockCount').textContent = String(lowStock);
         document.getElementById('activityChip').textContent = `${scans.length} hændelser`;
         document.getElementById('inventoryChip').textContent = `${balanced} i balance`;
-        if (shoppingListItems.length > 0) {
-            document.getElementById('shoppingChip').textContent = `${Number(shoppingList?.summary?.unchecked_items || 0)} på sedlen`;
-        } else {
-            document.getElementById('shoppingChip').textContent = `${Number(shopping?.summary?.total_candidates || 0)} klare kandidater`;
-        }
-        const offersChip = document.getElementById('offersChip');
-        if (offersChip) {
-            offersChip.textContent = `${Number(shopping?.summary?.with_offer || 0)} tilbud fundet`;
-        }
-        const leafletOffersChip = document.getElementById('leafletOffersChip');
-        if (leafletOffersChip) {
-            leafletOffersChip.textContent = `${leafletOffersWithoutNetto.length} fundet`;
-        }
+        document.getElementById('shoppingChip').textContent = `${lowStock} klare kandidater`;
         document.getElementById('planChip').textContent = `${productList.length ? 'Klar til ugeblik' : 'Afventer varer'}`;
         document.getElementById('attentionItemsValue').textContent = String(lowStock);
         document.getElementById('scanSummary').textContent = scans.length ? 'Scanlog findes stadig, men er gjort diskret.' : 'Scannerflowet er klar, men ligger i baggrunden indtil der er brug for det.';
@@ -3304,32 +1825,7 @@ async function refresh() {
     } catch (e) {
         document.getElementById('scansBody').innerHTML = '<div class="empty">Fejl ved indlæsning af scannerflow.</div>';
         document.getElementById('productsBody').innerHTML = '<div class="empty">Fejl ved indlæsning af lagerdata.</div>';
-        const shoppingBody = document.getElementById('shoppingBody');
-        if (shoppingBody) {
-            shoppingBody.innerHTML = '<div class="empty">Fejl ved indlæsning af indkøbskandidater.</div>';
-        }
-        const offersBody = document.getElementById('offersBody');
-        if (offersBody) {
-            offersBody.innerHTML = '<div class="empty">Fejl ved indlæsning af tilbud.</div>';
-        }
-        const leafletOffersBody = document.getElementById('leafletOffersBody');
-        if (leafletOffersBody) {
-            leafletOffersBody.innerHTML = '<div class="empty">Fejl ved indlæsning af tilbudsavis-liste.</div>';
-        }
-
-        const reason = formatConnectionError(e);
-        if (/HTTP\s+401/i.test(reason)) {
-            accessToken = '';
-            window.localStorage.removeItem('madAccessToken');
-            isPlatformAdmin = false;
-            setAdminOnlyVisibility(false);
-            lockApp();
-            setGateStatus('Din session er udløbet. Log ind igen.', true);
-            syncStatus.textContent = 'Session udløbet';
-            return;
-        }
-
-        syncStatus.textContent = 'Forbindelse fejlede (' + reason + ')';
+        syncStatus.textContent = 'Forbindelse fejlede';
     }
 }
 
@@ -3337,15 +1833,8 @@ document.getElementById('refreshButton').addEventListener('click', refresh);
 document.getElementById('aiSuggestButton').addEventListener('click', fetchAiIdeas);
 window.addEventListener('hashchange', updateNavFromHash);
 initAdminConsole();
-initIngredientTools();
-applyTraditionalPage(<?= json_encode($currentPage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
 updateNavFromHash();
-initAuthGate();
-enforceAuthGate().then(() => {
-    if (accessToken) {
-        refresh();
-    }
-});
+refresh();
 setInterval(refresh, 5000);
 </script>
 </body>

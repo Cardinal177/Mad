@@ -565,7 +565,7 @@ async function validateSession() {
         const el = document.getElementById('authStatus');
         el.textContent = 'Token er ugyldigt eller udloeberet. Log ind via 2FA igen.';
         el.className = 'err';
-        openTab('tab-login');
+        openTab('tab-config');
         return false;
     }
 

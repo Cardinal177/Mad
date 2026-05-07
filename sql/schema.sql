@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS household_locations (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   household_id BIGINT UNSIGNED NOT NULL,
   name VARCHAR(120) NOT NULL,
+  location_type ENUM('dry', 'fridge', 'freezer', 'counter', 'other') NOT NULL DEFAULT 'dry',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_household_location_name (household_id, name),
   CONSTRAINT fk_locations_household
@@ -62,6 +63,7 @@ CREATE TABLE IF NOT EXISTS products (
   nutrition_updated_at DATETIME DEFAULT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  product_type ENUM('tørvare','ferskvare','mejeri','kød','fisk','frugt_groent','frostvare','krydderier','drikke','konserves','brød','andet') NOT NULL DEFAULT 'andet',
   UNIQUE KEY uq_products_barcode (barcode)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -94,6 +96,7 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
   movement_type ENUM('in', 'out', 'adjust') NOT NULL,
   quantity_delta DECIMAL(10,2) NOT NULL,
   source ENUM('esp32', 'manual', 'import', 'recipe') NOT NULL DEFAULT 'manual',
+  expires_at DATE DEFAULT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_movements_household
     FOREIGN KEY (household_id) REFERENCES households(id)

@@ -127,6 +127,31 @@ Naeringsstrategi:
 - QR label automatisering og printflow.
 - Deling af opskrifter og varekatalog mellem husstande.
 
+### Tilbud scraping job (foerste version)
+
+Der er nu et script, som scraper tilbud fra konfigurerede butikssider, matcher mod produkter og indsætter i `store_offers`:
+
+- `scripts/scrape_offers.php`
+
+Konfiguration i `.env`:
+
+- `OFFERS_SCRAPE_TIMEOUT_SECONDS=12`
+- `OFFERS_SCRAPE_USER_AGENT='MadOfferBot/0.1 (+ops@example.com)'`
+- `OFFERS_SCRAPE_SOURCES=[{"store":"Netto","url":"https://netto.dk/tilbudsavis/"},{"store":"Kvickly","url":"https://kvickly.coop.dk/avis/"},{"store":"365discount","url":"https://365discount.coop.dk/365avis/"}]`
+
+Kørsel:
+
+```bash
+php scripts/scrape_offers.php
+```
+
+Bemærk:
+
+- Første version læser primært JSON-LD tilbud fra siderne.
+- Hvis `OFFERS_SCRAPE_SOURCES` er tom eller mangler, bruges standardkilder: Netto + Kvickly + 365discount.
+- Match til produkter sker via barcode (hvis tilgængelig) og navn/brand score.
+- Resultatet bruges direkte i indkoebsflowet via `shopping.candidates` endpointet.
+
 ## Aabne afklaringer
 
 - Skal hver husstand have eget abonnement/plan?
