@@ -57,6 +57,8 @@ put "$PROJECT_DIR/public/index.php" -o "$FTP_PATH/index.php"
 put "$PROJECT_DIR/public/api.php" -o "$FTP_PATH/api.php"
 put "$PROJECT_DIR/public/live.php" -o "$FTP_PATH/live.php"
 put "$PROJECT_DIR/public/opsaetning.php" -o "$FTP_PATH/opsaetning.php"
+put "$PROJECT_DIR/public/mobile-shopping.php" -o "$FTP_PATH/mobile-shopping.php"
+put "$PROJECT_DIR/public/mobile-lager.php" -o "$FTP_PATH/mobile-lager.php"
 
 mirror -R \
   --verbose=2 \
