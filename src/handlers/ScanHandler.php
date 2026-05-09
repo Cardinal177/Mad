@@ -1795,7 +1795,29 @@ function handleShoppingListRemoveItem(PDO $pdo): void
     }
 
     try {
-                'message' => $e->getMessage(),
+        $stmt = $pdo->prepare(
+            'DELETE si FROM shopping_list_items si
+             INNER JOIN shopping_lists sl ON sl.id = si.shopping_list_id
+             WHERE si.id = ?
+               AND sl.household_id = ?
+               AND sl.status IN ("open", "in_progress")'
+        );
+        $stmt->execute([$itemId, $householdId]);
+
+        if ($stmt->rowCount() < 1) {
+            response(404, ['error' => 'Shopping list item not found']);
+            return;
+        }
+
+        response(200, [
+            'status' => 'ok',
+            'item_id' => $itemId,
+            'removed' => true,
+        ]);
+    } catch (Throwable $e) {
+        response(500, [
+            'error' => 'Database error',
+            'message' => $e->getMessage(),
         ]);
     }
 }
