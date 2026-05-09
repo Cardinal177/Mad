@@ -3752,6 +3752,8 @@ function initInventoryScanActions() {
     }
     result.dataset.scanActionsBound = '1';
 
+    let scanInputTimer = null;
+
     const submitScanInput = async () => {
         const code = String(scanInput.value || '').trim();
         if (!code) {
@@ -3760,6 +3762,27 @@ function initInventoryScanActions() {
         scanInput.value = '';
         appendInventoryScanDebug(`Manuel registrer: ${code}`);
         await handleScannedBarcode(code);
+    };
+
+    const processScannerFieldValue = async (rawValue, sourceLabel) => {
+        const raw = String(rawValue || '').trim();
+        if (!raw) {
+            return;
+        }
+
+        const modeOnly = parseScannerModeCommand(raw);
+        if (modeOnly) {
+            setInventoryScanMode(modeOnly, sourceLabel + ' mode');
+            scanInput.value = '';
+            return;
+        }
+
+        const parsed = parseScannerPayload(raw);
+        if (String(parsed.barcode || '').trim().length >= 8) {
+            appendInventoryScanDebug(`${sourceLabel}: ${raw}`);
+            scanInput.value = '';
+            await handleScannedBarcode(raw);
+        }
     };
 
     const setMode = (mode) => setInventoryScanMode(mode, 'klik');
@@ -3884,10 +3907,31 @@ function initInventoryScanActions() {
         void submitScanInput();
     });
 
+    scanInput.addEventListener('input', () => {
+        if (scanInputTimer) {
+            clearTimeout(scanInputTimer);
+            scanInputTimer = null;
+        }
+
+        // Bluetooth/ESP32 keyboards sometimes only emit input changes, not usable keydown keys.
+        scanInputTimer = setTimeout(() => {
+            void processScannerFieldValue(scanInput.value, 'input-event');
+        }, 90);
+    });
+
     scanInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
             void submitScanInput();
+        }
+    });
+
+    scanInput.addEventListener('blur', () => {
+        const page = String(window.location.hash || '').replace('#', '') || String(currentPage || '');
+        if (page === 'lager' || page === 'inventorySection') {
+            setTimeout(() => {
+                scanInput.focus();
+            }, 120);
         }
     });
 
