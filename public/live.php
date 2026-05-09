@@ -2066,6 +2066,7 @@ let inventoryCameraFrameToken = null;
 let inventoryCameraLastDetectAt = 0;
 let inventoryScanMode = 'in';
 let inventoryScanDebugLines = [];
+let inventoryLastProcessedScan = {signature: '', at: 0};
 
 if (params.get('device_token')) {
     window.localStorage.setItem('madDeviceToken', params.get('device_token'));
@@ -3661,6 +3662,42 @@ function fillIngredientFieldsForBarcode(barcode, product = null) {
     }
 }
 
+function shouldIgnoreDuplicateScan(barcode, mode) {
+    const code = String(barcode || '').trim();
+    const movement = mode === 'out' ? 'out' : 'in';
+    if (!code) {
+        return false;
+    }
+
+    const now = Date.now();
+    const signature = `${movement}:${code}`;
+    const withinWindow = (now - Number(inventoryLastProcessedScan.at || 0)) < 1200;
+    if (withinWindow && inventoryLastProcessedScan.signature === signature) {
+        return true;
+    }
+
+    inventoryLastProcessedScan = {signature, at: now};
+    return false;
+}
+
+async function registerInventoryMovement(barcode, locationIdRaw = '') {
+    const code = String(barcode || '').trim();
+    if (!code) {
+        return;
+    }
+    const locationId = Number(locationIdRaw || 0) || Number(document.getElementById('ingredientLocationId')?.value || 0) || 1;
+    appendInventoryScanDebug(`Sender scan API: ${code}, mode=${inventoryScanMode}, loc=${locationId}`);
+    const payload = await postJson('api.php?endpoint=scan', {
+        barcode: code,
+        household_id: Number(householdId || 1),
+        location_id: locationId,
+        movement_type: inventoryScanMode,
+        quantity: 1,
+    }, {includeDeviceToken: true});
+    setInventoryScanStatus(`Lager registreret: ${inventoryScanMode === 'out' ? 'ud' : 'ind'} (${String(payload?.barcode || code)})`);
+    appendInventoryScanDebug(`API svar: ${String(payload?.status || 'ok')} ${String(payload?.message || '')}`);
+}
+
 function openIngredientCreatePanel() {
     const panel = document.getElementById('ingredientCreateDetails');
     if (panel instanceof HTMLElement && panel.tagName.toLowerCase() === 'details') {
@@ -3679,6 +3716,11 @@ async function handleScannedBarcode(barcode) {
         setInventoryScanMode(parsed.modeHint, 'scanner payload');
     }
 
+    if (shouldIgnoreDuplicateScan(code, inventoryScanMode)) {
+        appendInventoryScanDebug(`Ignoreret dublet-scan: ${code}`);
+        return;
+    }
+
     lastScannedBarcode = code;
     lastScanLookupProduct = null;
 
@@ -3686,10 +3728,24 @@ async function handleScannedBarcode(barcode) {
 
     const existing = findInventoryProductByBarcode(code);
     if (existing) {
+        let autoRegisterMessage = 'Klik for at registrere bevægelse.';
+        let autoRegisterClass = '';
+        try {
+            await registerInventoryMovement(code, String(existing.location_id || ''));
+            autoRegisterMessage = `Bevægelse er registreret automatisk (${inventoryScanMode === 'out' ? 'ud' : 'ind'}).`;
+            autoRegisterClass = ' state-ok';
+            await refresh();
+        } catch (e) {
+            autoRegisterMessage = 'Automatisk registrering fejlede. Prøv knappen nedenfor.';
+            autoRegisterClass = ' state-low';
+            appendInventoryScanDebug('Auto-registrering fejlede: ' + String(e?.message || e));
+        }
+
         renderInventoryScanResult(`
             <div>
                 <strong>Varen findes allerede:</strong> ${esc(existing.name || 'Ukendt vare')}
                 <div class="inventory-scan-copy">Barcode ${esc(code)} findes i lageret.</div>
+                <div class="inventory-scan-copy${autoRegisterClass}">${esc(autoRegisterMessage)}</div>
             </div>
             <div class="inventory-scan-actions">
                 <button type="button" class="scan-action primary" data-scan-action="register-movement" data-barcode="${esc(code)}" data-location-id="${esc(String(existing.location_id || ''))}">Registrer ${inventoryScanMode === 'out' ? 'ud af lager' : 'ind i lager'}</button>
@@ -3697,7 +3753,7 @@ async function handleScannedBarcode(barcode) {
                 <button type="button" class="scan-action" data-scan-action="open-create" data-barcode="${esc(code)}">Se/Opret detaljer</button>
             </div>
         `);
-        setInventoryScanStatus(`Fundet i lager. Klar til registrering (${inventoryScanMode === 'out' ? 'ud' : 'ind'}).`);
+        setInventoryScanStatus(`Fundet i lager. ${autoRegisterMessage}`);
         return;
     }
 
@@ -3786,24 +3842,6 @@ function initInventoryScanActions() {
     };
 
     const setMode = (mode) => setInventoryScanMode(mode, 'klik');
-
-    const registerInventoryMovement = async (barcode, locationIdRaw = '') => {
-        const code = String(barcode || '').trim();
-        if (!code) {
-            return;
-        }
-        const locationId = Number(locationIdRaw || 0) || Number(document.getElementById('ingredientLocationId')?.value || 0) || 1;
-        appendInventoryScanDebug(`Sender scan API: ${code}, mode=${inventoryScanMode}, loc=${locationId}`);
-        const payload = await postJson('api.php?endpoint=scan', {
-            barcode: code,
-            household_id: Number(householdId || 1),
-            location_id: locationId,
-            movement_type: inventoryScanMode,
-            quantity: 1,
-        }, {includeDeviceToken: true});
-        setInventoryScanStatus(`Lager registreret: ${inventoryScanMode === 'out' ? 'ud' : 'ind'} (${esc(String(payload?.barcode || code))})`);
-        appendInventoryScanDebug(`API svar: ${String(payload?.status || 'ok')} ${String(payload?.message || '')}`);
-    };
 
     modeInBtn.addEventListener('click', () => setMode('in'));
     modeOutBtn.addEventListener('click', () => setMode('out'));
