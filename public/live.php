@@ -5037,6 +5037,7 @@ async function refresh() {
         const shoppingListItems = Array.isArray(shoppingList.items) ? shoppingList.items : [];
         const shoppingCandidateItems = Array.isArray(shopping.items) ? shopping.items : [];
 
+        void syncDeviceScanContext(true);
         renderScans(scans);
         renderProducts(productList);
         initInventoryCardActions();
@@ -5138,7 +5139,6 @@ console.log('[Init] Started mode polling interval:', pollModeInterval);
 pollInventoryModeFromServer();  // Initial poll
 setInterval(pollInventoryLastScanFromServer, 700);
 pollInventoryLastScanFromServer();
-void syncDeviceScanContext(true);
 setInterval(() => {
     void syncDeviceScanContext(false);
 }, 10000);
