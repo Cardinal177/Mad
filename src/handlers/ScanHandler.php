@@ -1620,9 +1620,23 @@ function handleShoppingListAddItems(PDO $pdo): void
             $productName = trim((string) ($item['title'] ?? ''));
             $preferredStore = trim((string) ($item['store'] ?? ''));
             $productId = (int) ($item['productId'] ?? 0);
+            $quantity = (int) ($item['quantity'] ?? 1);
+            if ($quantity < 1) {
+                $quantity = 1;
+            }
             $offerId = (int) ($item['offerId'] ?? 0);
             $offerPrice = null;
             $offerValidUntil = null;
+            $manualPriceRaw = isset($item['price']) ? trim((string) $item['price']) : '';
+            if ($manualPriceRaw !== '') {
+                $normalizedPrice = str_replace(',', '.', $manualPriceRaw);
+                if (is_numeric($normalizedPrice)) {
+                    $manualPrice = (float) $normalizedPrice;
+                    if ($manualPrice >= 0) {
+                        $offerPrice = $manualPrice;
+                    }
+                }
+            }
 
             if ($productId > 0) {
                 $productStmt = $pdo->prepare(
@@ -1693,7 +1707,7 @@ function handleShoppingListAddItems(PDO $pdo): void
                     $shoppingListId,
                     $productId > 0 ? $productId : null,
                     $productName,
-                    1,
+                    $quantity,
                     $preferredStore !== '' ? $preferredStore : null,
                     $offerId > 0 ? $offerId : null,
                     $offerPrice,
@@ -1708,7 +1722,7 @@ function handleShoppingListAddItems(PDO $pdo): void
                     $shoppingListId,
                     $productId > 0 ? $productId : null,
                     $productName,
-                    1,
+                    $quantity,
                     $preferredStore !== '' ? $preferredStore : null,
                     $offerPrice,
                     $offerValidUntil,

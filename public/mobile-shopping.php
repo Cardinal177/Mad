@@ -47,6 +47,11 @@ declare(strict_types=1);
         .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.04); }
         .stack { display: grid; gap: 10px; }
         .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+        .add-meta-row {
+            display: grid;
+            grid-template-columns: 0.9fr 1fr 1.2fr;
+            gap: 8px;
+        }
         input, button {
             border-radius: 12px;
             border: 1px solid var(--line);
@@ -218,6 +223,11 @@ declare(strict_types=1);
         <div class="row">
             <input id="addInput" type="text" placeholder="Skriv vare (fx Faxe Kondi) eller vælg lagerforslag">
             <button id="addBtn" class="btn-primary" type="button">Tilføj</button>
+        </div>
+        <div class="add-meta-row">
+            <input id="addQty" type="number" min="1" step="1" value="1" placeholder="Antal">
+            <input id="addPrice" type="text" inputmode="decimal" placeholder="Pris (kr)">
+            <input id="addStore" type="text" placeholder="Butik">
         </div>
         <div id="suggestions" class="suggestions"></div>
         <div id="addStatus" class="status"></div>
@@ -403,15 +413,15 @@ function renderList(items) {
         const id = Number(item?.id || 0);
         const displayName = resolveDisplayName(item);
         const store = String(item?.preferred_store || '').trim();
-        const meta = store ? store : 'Indkøb';
+        const quantity = Math.max(1, Number(item?.quantity || 1));
         const hasPrice = item?.offer_price !== null && item?.offer_price !== undefined && !Number.isNaN(Number(item.offer_price));
-        const price = hasPrice ? Number(item.offer_price).toFixed(2).replace('.', ',') + ' kr' : '';
+        const price = hasPrice ? Number(item.offer_price).toFixed(2).replace('.', ',') + ' kr' : '-';
+        const meta = `Antal: ${Number.isInteger(quantity) ? quantity : quantity.toString().replace('.', ',')} · Pris: ${price} · Butik: ${store || '-'}`;
         return `<li class="item-shell${checked ? ' checked' : ''}" data-item-id="${id}">
             <button class="swipe-delete" data-action="remove" data-id="${id}">Slet</button>
             <div class="item-card item-main" data-action="toggle" data-id="${id}" data-next="${checked ? '0' : '1'}" role="button" tabindex="0" aria-label="Marker ${esc(displayName)} som købt">
                 <p class="name">${esc(displayName)}</p>
                 <p class="meta">${esc(meta)}</p>
-                ${price ? `<div class="price">${esc(price)}</div>` : ''}
             </div>
         </li>`;
     }).join('');
@@ -531,17 +541,44 @@ function renderSuggestions(rawQuery) {
 async function addItemByText(name) {
     const cleaned = String(name || '').trim();
     if (!cleaned) return;
+    const qtyValue = Number(document.getElementById('addQty')?.value || 1);
+    const quantity = Number.isFinite(qtyValue) && qtyValue > 0 ? Math.max(1, Math.round(qtyValue)) : 1;
+    const priceRaw = String(document.getElementById('addPrice')?.value || '').trim();
+    const priceNormalized = priceRaw.replace(',', '.');
+    const price = Number(priceNormalized);
+    const store = String(document.getElementById('addStore')?.value || '').trim();
+    if (!store) {
+        throw new Error('Indtast butik');
+    }
+    if (!priceRaw || Number.isNaN(price) || price < 0) {
+        throw new Error('Indtast gyldig pris');
+    }
     await apiPost(`api.php?endpoint=shopping.list.add_items&household_id=${encodeURIComponent(householdId || 1)}`, {
-        items: [{title: cleaned}],
+        items: [{title: cleaned, quantity, price, store}],
     });
 }
 
 async function addItemFromInventory(productId, name, store) {
+    const qtyValue = Number(document.getElementById('addQty')?.value || 1);
+    const quantity = Number.isFinite(qtyValue) && qtyValue > 0 ? Math.max(1, Math.round(qtyValue)) : 1;
+    const priceRaw = String(document.getElementById('addPrice')?.value || '').trim();
+    const priceNormalized = priceRaw.replace(',', '.');
+    const price = Number(priceNormalized);
+    const typedStore = String(document.getElementById('addStore')?.value || '').trim();
+    const preferredStore = typedStore || String(store || '').trim();
+    if (!preferredStore) {
+        throw new Error('Indtast butik');
+    }
+    if (!priceRaw || Number.isNaN(price) || price < 0) {
+        throw new Error('Indtast gyldig pris');
+    }
     await apiPost(`api.php?endpoint=shopping.list.add_items&household_id=${encodeURIComponent(householdId || 1)}`, {
         items: [{
             productId: Number(productId || 0),
             title: String(name || ''),
-            store: String(store || ''),
+            quantity,
+            price,
+            store: preferredStore,
         }],
     });
 }
