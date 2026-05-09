@@ -1157,6 +1157,30 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             font-weight: 800;
             padding: 0 9px;
         }
+        .shopping-pills {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            justify-self: start;
+        }
+        .shopping-price {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 42px;
+            height: 24px;
+            border-radius: 999px;
+            padding: 0 8px;
+            font-size: 11px;
+            font-weight: 700;
+            background: rgba(20,35,29,0.08);
+            color: var(--ink);
+        }
+        .shopping-price.missing {
+            background: rgba(20,35,29,0.05);
+            color: var(--muted);
+            font-weight: 600;
+        }
         .shopping-check,
         .shopping-delete {
             min-width: 34px;
@@ -1189,7 +1213,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                 grid-template-columns: auto minmax(0, 1fr) auto;
                 gap: 8px;
             }
-            .shopping-qty {
+            .shopping-pills {
                 justify-self: start;
                 grid-column: 2;
             }
@@ -2511,9 +2535,6 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
             }
         }
 
-        if (rowPrice !== null && !Number.isNaN(rowPrice)) {
-            metaParts.push('Tilbud ' + formatDkk(rowPrice));
-        }
         if (item?.brand) {
             metaParts.push(String(item.brand));
         }
@@ -2523,6 +2544,9 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
 
         const itemId = Number(item?.id || 0);
         const isChecked = !!item?.is_checked;
+        const priceBadge = (rowPrice !== null && !Number.isNaN(rowPrice))
+            ? `<span class="shopping-price" title="Tilbudspris">${esc(formatDkk(rowPrice))}</span>`
+            : '<span class="shopping-price missing" title="Pris ikke fundet">pris ?</span>';
 
         return `<li class="shopping-row${isChecked ? ' checked' : ''}">
             <button class="shopping-check"
@@ -2541,7 +2565,10 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
                 <p class="shopping-name">${esc(item?.product_name || 'Ukendt vare')}</p>
                 <p class="shopping-meta">${esc(metaParts.join(' · '))}</p>
             </div>
-            <span class="shopping-qty">${esc(formatQuantity(item?.quantity ?? 1))}</span>
+            <div class="shopping-pills">
+                <span class="shopping-qty">${esc(formatQuantity(item?.quantity ?? 1))}</span>
+                ${priceBadge}
+            </div>
             <button class="shopping-delete"
                 data-shopping-action="remove"
                 data-item-id="${itemId}"
