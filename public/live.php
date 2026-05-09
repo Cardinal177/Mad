@@ -596,6 +596,18 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             background: rgba(143, 79, 79, 0.14);
             color: var(--berry);
         }
+        .basis-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            border-radius: 999px;
+            padding: 3px 8px;
+            font-size: 10px;
+            font-weight: 700;
+            white-space: nowrap;
+            background: rgba(47, 106, 86, 0.12);
+            color: var(--ok);
+        }
         .inventory-qty-col {
             display: flex;
             flex-direction: column;
@@ -1331,6 +1343,46 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             font-size: 11px;
             color: var(--accent);
             font-weight: 600;
+        }
+        .shopping-offer-pick {
+            margin-top: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            border: 1px solid rgba(20,35,29,0.14);
+            background: #fff;
+            color: var(--text);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 9px;
+            cursor: pointer;
+        }
+        .shopping-offer-logo {
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 900;
+            border: 1px solid transparent;
+        }
+        .shopping-offer-logo.netto {
+            background: #ffd54f;
+            color: #3a2b00;
+            border-color: rgba(212,136,6,0.65);
+        }
+        .shopping-offer-logo.kvickly {
+            background: #d32f2f;
+            color: #fff;
+            border-color: rgba(163,28,28,0.75);
+        }
+        .shopping-offer-logo.discount365 {
+            background: #2e7d32;
+            color: #fff;
+            border-color: rgba(31,106,35,0.75);
         }
         .shopping-qty {
             display: inline-flex;
@@ -2558,6 +2610,7 @@ function renderProducts(products) {
         const weightValue = Number(product.weight_grams ?? 0);
         const hasWeight = Number.isFinite(weightValue) && weightValue > 0;
         const infoLine = [product.brand, locationBadge ? (product.location_name || '') : '', typeBadge ? '' : ''].filter(Boolean).join(' · ');
+        const isBasis = Number(product.is_basis ?? 0) === 1;
         
         // Strip brand from product name for display
         const normWords = (s) => s
@@ -2593,6 +2646,7 @@ function renderProducts(products) {
                 <div>
                     <h3 class="inventory-name">${esc(displayName)}</h3>
                     <p class="inventory-brand">${[product.brand, product.location_name ? (locationTypeIcon(product.location_type) + ' ' + product.location_name) : ''].filter(Boolean).join(' · ')}</p>
+                    ${isBasis ? '<span class="basis-badge">Basisvare</span>' : ''}
                 </div>
                 <div class="inventory-qty-col">
                     <span class="state-badge ${state.className}" style="margin-bottom:2px">${esc(state.label)}</span>
@@ -2773,7 +2827,9 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
         const typeText = (String(item?.product_type || 'andet') === 'andet')
             ? inferCategoryLabelFromName(item?.product_name || '')
             : baseType;
-        const storeText = String(item?.preferred_store || '').trim();
+        const offerSource = String(item?.offer_source || '').trim();
+        const isSuggestion = offerSource === 'fuzzy_fallback' || offerSource === 'exact_title_fallback';
+        const storeText = isSuggestion ? '' : String(item?.preferred_store || '').trim();
         const metaParts = [typeText];
         if (storeText) {
             metaParts.push(storeText);
@@ -2836,6 +2892,22 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
         // Show offer hint (brand + store) only when an offer is found
         const hasOffer = rowPrice !== null && !Number.isNaN(rowPrice);
         const offerStore = String(item?.offer_store || item?.preferred_store || '').trim();
+        const offerTitle = String(item?.offer_title || '').trim();
+        const offerId = Number(item?.offer_id || 0);
+        const offerClass = (() => {
+            const v = offerStore.toLowerCase();
+            if (v.includes('netto')) return 'netto';
+            if (v.includes('kvickly')) return 'kvickly';
+            if (v.includes('365')) return 'discount365';
+            return '';
+        })();
+        const offerLogo = (() => {
+            const v = offerStore.toLowerCase();
+            if (v.includes('netto')) return 'N';
+            if (v.includes('kvickly')) return 'K';
+            if (v.includes('365')) return '365';
+            return 'Til';
+        })();
         const offerHint = hasOffer && (brand || offerStore)
             ? `<p class="shopping-offer-hint">${esc([brand, offerStore].filter(Boolean).join(' · '))}</p>`
             : '';
@@ -2846,9 +2918,23 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
 
         const itemId = Number(item?.id || 0);
         const isChecked = !!item?.is_checked;
-        const priceBadge = hasOffer
+        const showAppliedPrice = !isSuggestion && hasOffer;
+        const priceBadge = showAppliedPrice
             ? `<span class="shopping-price" title="Tilbudspris">${esc(formatDkk(rowPrice))}</span>`
             : '<span class="shopping-price missing" title="Pris ikke fundet">pris ?</span>';
+        const offerPick = isSuggestion && hasOffer && offerStore
+            ? `<button class="shopping-offer-pick"
+                data-shopping-action="offer"
+                data-item-id="${itemId}"
+                data-offer-id="${offerId}"
+                data-offer-store="${esc(offerStore)}"
+                data-offer-title="${esc(offerTitle)}"
+                data-offer-price="${esc(formatDkk(rowPrice))}"
+                title="Se tilbud">
+                <span class="shopping-offer-logo${offerClass ? ' ' + offerClass : ''}">${esc(offerLogo)}</span>
+                <span>Tilbud</span>
+            </button>`
+            : '';
 
         return `<li class="shopping-row${isChecked ? ' checked' : ''}">
             <button class="shopping-check"
@@ -2867,6 +2953,7 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
                 <p class="shopping-name">${esc(displayName)}</p>
                 ${offerHint}
                 <p class="shopping-meta">${esc(metaParts.join(' · '))}</p>
+                ${offerPick}
             </div>
             <div class="shopping-pills">
                 <span class="shopping-qty">${esc(formatQuantity(item?.quantity ?? 1))}</span>
@@ -2888,6 +2975,14 @@ async function setShoppingItemChecked(itemId, isChecked) {
     await postJson(`api.php?endpoint=shopping.list.set_item_checked&household_id=${encodeURIComponent(targetHouseholdId)}`, {
         item_id: Number(itemId || 0),
         is_checked: !!isChecked,
+    });
+}
+
+async function applyShoppingOffer(itemId, offerId) {
+    const targetHouseholdId = Number(householdId || 0) > 0 ? String(householdId) : '1';
+    await postJson(`api.php?endpoint=shopping.list.apply_offer&household_id=${encodeURIComponent(targetHouseholdId)}`, {
+        item_id: Number(itemId || 0),
+        offer_id: Number(offerId || 0),
     });
 }
 
@@ -2933,6 +3028,26 @@ function initShoppingListActions() {
             if (action === 'toggle') {
                 const nextChecked = actionTarget.dataset.nextChecked === '1';
                 await setShoppingItemChecked(itemId, nextChecked);
+                await refresh();
+                return;
+            }
+
+            if (action === 'offer') {
+                const offerId = Number(actionTarget.dataset.offerId || 0);
+                const offerStore = String(actionTarget.dataset.offerStore || '').trim();
+                const offerTitle = String(actionTarget.dataset.offerTitle || '').trim();
+                const offerPrice = String(actionTarget.dataset.offerPrice || '').trim();
+                if (!offerId) {
+                    alert('Tilbuddet kan ikke anvendes endnu (mangler tilbuds-id).');
+                    return;
+                }
+                const shouldApply = window.confirm(
+                    `Brug dette tilbud?\n\n${offerTitle || 'Tilbud'}\n${offerStore}${offerPrice ? ' · ' + offerPrice : ''}`
+                );
+                if (!shouldApply) {
+                    return;
+                }
+                await applyShoppingOffer(itemId, offerId);
                 await refresh();
                 return;
             }

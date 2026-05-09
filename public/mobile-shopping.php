@@ -57,6 +57,11 @@ declare(strict_types=1);
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 6px;
         }
+        .edit-store-picker {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 6px;
+        }
         .store-btn {
             border-radius: 10px;
             border: 1px solid var(--line);
@@ -88,6 +93,11 @@ declare(strict_types=1);
             box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(47,106,86,0.5);
             transform: translateY(-1px);
         }
+        .store-btn.clear {
+            background: #f4f5f4;
+            color: var(--muted);
+            border-color: #cfd6d1;
+        }
         input, button {
             border-radius: 12px;
             border: 1px solid var(--line);
@@ -116,9 +126,11 @@ declare(strict_types=1);
             border-bottom: 1px solid var(--line);
         }
         .sg-item:last-child { border-bottom: 0; }
+        .sg-item.existing { background: rgba(47,106,86,0.06); }
         .sg-name { font-size: 14px; font-weight: 600; }
         .sg-meta { font-size: 12px; color: var(--muted); }
         .sg-add { font-size: 13px; color: var(--accent); border-color: var(--accent); padding: 6px 10px; }
+        .sg-add:disabled { color: #8a938e; border-color: #cfd6d1; }
         .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
         .item-shell {
             position: relative;
@@ -138,6 +150,9 @@ declare(strict_types=1);
             position: relative;
             z-index: 2;
             touch-action: pan-y;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
         }
         .item-shell.checked .item-card {
             background: #f5f6f5;
@@ -179,6 +194,126 @@ declare(strict_types=1);
         .name { margin: 0; font-size: 15px; font-weight: 700; }
         .meta { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
         .price { font-size: 12px; color: var(--accent); font-weight: 700; }
+        .offer-chip {
+            margin-top: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            background: #fff;
+            color: var(--text);
+        }
+        .offer-logo {
+            width: 20px;
+            height: 20px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 0.1px;
+        }
+        .offer-logo.netto { background: #ffd54f; color: #3a2b00; border: 1px solid rgba(212,136,6,0.65); }
+        .offer-logo.kvickly { background: #d32f2f; color: #fff; border: 1px solid rgba(163,28,28,0.75); }
+        .offer-logo.discount365 { background: #2e7d32; color: #fff; border: 1px solid rgba(31,106,35,0.75); }
+
+        .offer-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 70;
+            display: none;
+            align-items: flex-end;
+            background: rgba(20,35,29,0.45);
+            backdrop-filter: blur(4px);
+            padding: 12px;
+        }
+        .offer-modal.open { display: flex; }
+        .offer-card {
+            width: min(760px, 100%);
+            margin: 0 auto;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 14px;
+            box-shadow: 0 14px 26px rgba(0,0,0,0.14);
+        }
+        .offer-title { margin: 0; font-size: 16px; font-weight: 800; }
+        .offer-meta { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+        .offer-options {
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+            max-height: 42dvh;
+            overflow: auto;
+        }
+        .offer-option {
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: #fff;
+            padding: 9px 10px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 8px;
+            align-items: center;
+            text-align: left;
+        }
+        .offer-option.selected {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(47,106,86,0.12);
+            background: rgba(47,106,86,0.04);
+        }
+        .offer-option-title { font-size: 13px; font-weight: 700; line-height: 1.3; }
+        .offer-option-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+        .offer-option-price { font-size: 13px; font-weight: 800; color: var(--accent); }
+        .offer-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .offer-use {
+            border-color: var(--accent);
+            color: var(--accent);
+            font-weight: 800;
+        }
+        .edit-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 72;
+            display: none;
+            align-items: flex-end;
+            background: rgba(20,35,29,0.45);
+            backdrop-filter: blur(4px);
+            padding: 12px;
+        }
+        .edit-modal.open { display: flex; }
+        .edit-card {
+            width: min(760px, 100%);
+            margin: 0 auto;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 14px;
+            box-shadow: 0 14px 26px rgba(0,0,0,0.14);
+        }
+        .edit-title { margin: 0; font-size: 16px; font-weight: 800; }
+        .edit-fields { display: grid; gap: 10px; margin-top: 12px; }
+        .edit-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 14px;
+        }
+        .edit-card button {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
         .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 20px 8px; }
 
         .bottom-nav {
@@ -233,6 +368,16 @@ declare(strict_types=1);
     </style>
 </head>
 <body>
+<script>
+// Pre-hide gate immediately if token exists — prevents login flash on tab switch
+(function(){
+    try {
+        if (window.localStorage.getItem('madAccessToken')) {
+            document.write('<style>#authGate{display:none!important}#app{aria-hidden:false}</style>');
+        }
+    } catch(_){}
+})();
+</script>
 <div id="authGate" class="auth-gate">
     <div class="auth-card">
         <h2>Log ind</h2>
@@ -286,6 +431,37 @@ declare(strict_types=1);
     </div>
 </nav>
 
+<div id="offerModal" class="offer-modal" aria-hidden="true">
+    <div class="offer-card" role="dialog" aria-modal="true" aria-label="Tilbud">
+        <p id="offerModalTitle" class="offer-title">Tilbud</p>
+        <p id="offerModalMeta" class="offer-meta"></p>
+        <div id="offerOptions" class="offer-options"></div>
+        <div class="offer-actions">
+            <button id="offerModalUse" class="offer-use" type="button">Brug tilbud</button>
+            <button id="offerModalDismiss" type="button">Lad være</button>
+        </div>
+    </div>
+</div>
+
+<div id="editModal" class="edit-modal" aria-hidden="true">
+    <div class="edit-card" role="dialog" aria-modal="true" aria-label="Ret vare">
+        <p id="editModalTitle" class="edit-title">Ret vare</p>
+        <div class="edit-fields">
+            <input id="editQty" type="number" min="1" step="1" placeholder="Antal">
+            <div id="editStorePicker" class="edit-store-picker" aria-label="Vælg butik">
+                <button class="store-btn clear" type="button" data-store="">Ingen</button>
+                <button class="store-btn" type="button" data-store="Netto">N</button>
+                <button class="store-btn" type="button" data-store="Kvickly">K</button>
+                <button class="store-btn" type="button" data-store="365discount">365</button>
+            </div>
+        </div>
+        <div class="edit-actions">
+            <button id="editSaveBtn" class="btn-primary" type="button">Gem</button>
+            <button id="editCancelBtn" type="button">Annuller</button>
+        </div>
+    </div>
+</div>
+
 <script>
 const params = new URLSearchParams(window.location.search);
 const queryAccessToken = params.get('access_token') || '';
@@ -303,6 +479,10 @@ let gateLastAutoVerifyCode = '';
 let selectedAddStore = '';
 let inventoryProducts = [];
 let shoppingItems = [];
+let shoppingAutoRefreshInFlight = false;
+let pendingOfferSelection = null;
+let pendingEditItemId = 0;
+let pendingEditStore = '';
 
 function authHeaders() {
     const headers = {'Content-Type': 'application/json'};
@@ -329,7 +509,10 @@ function setStatus(elId, text, isErr = false) {
 }
 
 async function apiGet(url) {
-    const res = await fetch(url, {headers: authHeaders()});
+    const res = await fetch(url, {
+        headers: authHeaders(),
+        cache: 'no-store',
+    });
     if (!res.ok) {
         let msg = 'HTTP ' + res.status;
         try {
@@ -402,7 +585,64 @@ function unlockApp() {
 }
 
 function normalizeSearchText(v) {
-    return String(v || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    let s = String(v || '').toLowerCase();
+    s = s.replace(/æ/g, 'ae').replace(/ø/g, 'oe').replace(/å/g, 'aa');
+    try {
+        if (typeof s.normalize === 'function') {
+            s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+    } catch (_) {}
+    return s.trim().replace(/\s+/g, ' ');
+}
+
+function compactSearchText(v) {
+    return normalizeSearchText(v).replace(/\s+/g, '');
+}
+
+function resolveInventorySuggestionName(product) {
+    const raw = String(product?.name || '').trim();
+    const brand = String(product?.brand || '').trim();
+    if (!raw || !brand) return raw;
+
+    const normWords = (s) => s
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean);
+    const brandWords = normWords(brand);
+    const nameWords = raw.split(/\s+/);
+    let consumed = 0;
+    let bi = 0;
+    for (let ni = 0; ni < nameWords.length && bi < brandWords.length; ni++) {
+        const nw = normWords(nameWords[ni]);
+        if (nw.length === 1 && nw[0] === brandWords[bi]) {
+            consumed = ni + 1;
+            bi++;
+        } else if (nw.join('') === brandWords.slice(bi, bi + nw.length).join('')) {
+            consumed = ni + 1;
+            bi += nw.length;
+        } else {
+            break;
+        }
+    }
+    let stripped = nameWords.slice(consumed).join(' ').trim();
+    stripped = stripped.replace(/\s*\d+\s*(?:g|ml|l|cl|dl|kg|oz)\s*$/i, '').trim();
+    return stripped || raw;
+}
+
+function isItemAlreadyOnShoppingList(productId, name) {
+    const targetId = Number(productId || 0);
+    const normName = normalizeSearchText(name || '');
+    return shoppingItems.some((item) => {
+        if (!!item?.is_checked) return false;
+        const itemProductId = Number(item?.product_id || 0);
+        if (targetId > 0 && itemProductId > 0) {
+            return itemProductId === targetId;
+        }
+        const itemName = normalizeSearchText(resolveDisplayName(item));
+        return !!normName && itemName === normName;
+    });
 }
 
 function resolveDisplayName(item) {
@@ -436,12 +676,48 @@ function resolveDisplayName(item) {
     return stripped || raw;
 }
 
+function normalizeStoreClass(value) {
+    const text = String(value || '').trim().toLowerCase();
+    if (text.includes('netto')) return 'netto';
+    if (text.includes('kvickly')) return 'kvickly';
+    if (text.includes('365')) return 'discount365';
+    return '';
+}
+
+function storeLogoText(value) {
+    const text = String(value || '').trim().toLowerCase();
+    if (text.includes('netto')) return 'N';
+    if (text.includes('kvickly')) return 'K';
+    if (text.includes('365')) return '365';
+    return 'Til';
+}
+
+function findShoppingItem(itemId) {
+    return shoppingItems.find((item) => Number(item?.id || 0) === Number(itemId || 0)) || null;
+}
+
 function renderList(items) {
     const listEl = document.getElementById('list');
     const empty = document.getElementById('empty');
     if (!listEl || !empty) return;
 
-    const rows = Array.isArray(items) ? items : [];
+    const rows = (Array.isArray(items) ? items : []).slice().sort((a, b) => {
+        const aChecked = !!a?.is_checked;
+        const bChecked = !!b?.is_checked;
+        if (aChecked !== bChecked) {
+            return aChecked ? 1 : -1;
+        }
+
+        const aStore = String(a?.preferred_store || '').trim();
+        const bStore = String(b?.preferred_store || '').trim();
+        if (aStore !== bStore) {
+            if (!aStore) return 1;
+            if (!bStore) return -1;
+            return aStore.localeCompare(bStore, 'da');
+        }
+
+        return resolveDisplayName(a).localeCompare(resolveDisplayName(b), 'da');
+    });
     if (!rows.length) {
         listEl.innerHTML = '';
         empty.style.display = '';
@@ -453,16 +729,32 @@ function renderList(items) {
         const checked = !!item?.is_checked;
         const id = Number(item?.id || 0);
         const displayName = resolveDisplayName(item);
-        const store = String(item?.preferred_store || '').trim();
         const quantity = Math.max(1, Number(item?.quantity || 1));
-        const hasPrice = item?.offer_price !== null && item?.offer_price !== undefined && !Number.isNaN(Number(item.offer_price));
-        const price = hasPrice ? Number(item.offer_price).toFixed(2).replace('.', ',') + ' kr' : '-';
-        const meta = `Antal: ${Number.isInteger(quantity) ? quantity : quantity.toString().replace('.', ',')} · Pris: ${price} · Butik: ${store || '-'}`;
+        const offerId = Number(item?.offer_id || 0);
+        const offerTitle = String(item?.offer_title || '').trim();
+        const offerSource = String(item?.offer_source || '').trim();
+        const isSuggestion = offerSource === 'fuzzy_fallback' || offerSource === 'exact_title_fallback';
+        const visibleStore = isSuggestion ? '' : String(item?.preferred_store || item?.offer_store || '').trim();
+        const hasVisiblePrice = !isSuggestion && item?.offer_price !== null && item?.offer_price !== undefined && !Number.isNaN(Number(item.offer_price));
+        const visiblePrice = hasVisiblePrice ? Number(item.offer_price).toFixed(2).replace('.', ',') + ' kr' : '-';
+        const meta = `Antal: ${Number.isInteger(quantity) ? quantity : quantity.toString().replace('.', ',')}`
+            + ` · Pris: ${visiblePrice}`
+            + ` · Butik: ${visibleStore || '-'}`;
+        const offerStore = String(item?.offer_store || visibleStore || '').trim();
+        const offerPrice = item?.offer_price !== null && item?.offer_price !== undefined && !Number.isNaN(Number(item.offer_price))
+            ? Number(item.offer_price).toFixed(2).replace('.', ',') + ' kr'
+            : '';
+        const offerBadge = isSuggestion && offerStore && offerPrice
+            ? `<button class="offer-chip" data-action="offer" data-id="${id}" data-offer-id="${offerId}" data-offer-store="${esc(offerStore)}" data-offer-title="${esc(offerTitle)}" data-offer-price="${esc(offerPrice)}">
+                <span>Tilbud</span>
+            </button>`
+            : '';
         return `<li class="item-shell${checked ? ' checked' : ''}" data-item-id="${id}">
             <button class="swipe-delete" data-action="remove" data-id="${id}">Slet</button>
             <div class="item-card item-main" data-action="toggle" data-id="${id}" data-next="${checked ? '0' : '1'}" role="button" tabindex="0" aria-label="Marker ${esc(displayName)} som købt">
                 <p class="name">${esc(displayName)}</p>
                 <p class="meta">${esc(meta)}</p>
+                ${offerBadge}
             </div>
         </li>`;
     }).join('');
@@ -477,6 +769,69 @@ function closeSwipedRows(exceptItemId = 0) {
             row.classList.remove('swiped');
         }
     });
+}
+
+function setEditStore(value) {
+    pendingEditStore = String(value || '').trim();
+    document.querySelectorAll('#editStorePicker .store-btn').forEach((btn) => {
+        if (!(btn instanceof HTMLElement)) return;
+        btn.classList.toggle('selected', String(btn.dataset.store || '').trim() === pendingEditStore);
+    });
+}
+
+function closeEditModal() {
+    const modal = document.getElementById('editModal');
+    if (modal) {
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+    pendingEditItemId = 0;
+    pendingEditStore = '';
+}
+
+function openEditModal(itemId) {
+    const item = findShoppingItem(itemId);
+    const modal = document.getElementById('editModal');
+    const titleEl = document.getElementById('editModalTitle');
+    const qtyEl = document.getElementById('editQty');
+    if (!item || !modal || !(qtyEl instanceof HTMLInputElement) || !titleEl) return;
+
+    pendingEditItemId = Number(itemId || 0);
+    qtyEl.value = String(Math.max(1, Math.round(Number(item?.quantity || 1))));
+    setEditStore(String(item?.preferred_store || '').trim());
+    titleEl.textContent = 'Ret ' + resolveDisplayName(item);
+
+    // Clear accidental text selection from long-press before showing modal.
+    try {
+        window.getSelection()?.removeAllRanges();
+    } catch (_) {}
+
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    qtyEl.focus();
+    qtyEl.select();
+}
+
+async function saveEditedItem() {
+    const qtyEl = document.getElementById('editQty');
+    if (!(qtyEl instanceof HTMLInputElement) || !pendingEditItemId) {
+        closeEditModal();
+        return;
+    }
+
+    const quantity = Math.max(1, Math.round(Number(qtyEl.value || 1)));
+    try {
+        await apiPost(`api.php?endpoint=shopping.list.update_item&household_id=${encodeURIComponent(householdId || 1)}`, {
+            item_id: pendingEditItemId,
+            quantity,
+            store: pendingEditStore,
+        });
+        closeEditModal();
+        setStatus('addStatus', 'Varen er opdateret.');
+        await refreshShopping();
+    } catch (e) {
+        setStatus('addStatus', 'Kunne ikke rette varen: ' + String(e?.message || e), true);
+    }
 }
 
 function bindShoppingSwipeRows() {
@@ -494,15 +849,35 @@ function bindShoppingSwipeRows() {
         let startY = 0;
         let deltaX = 0;
         let isHorizontal = false;
+        let longPressTimer = 0;
+        let longPressTriggered = false;
+
+        const clearLongPress = () => {
+            if (longPressTimer) {
+                window.clearTimeout(longPressTimer);
+                longPressTimer = 0;
+            }
+        };
 
         track.addEventListener('touchstart', (event) => {
+            const target = event.target;
+            if (target instanceof HTMLElement && target.closest('[data-action="offer"]')) {
+                return;
+            }
             const touch = event.touches[0];
             if (!touch) return;
             startX = touch.clientX;
             startY = touch.clientY;
             deltaX = 0;
             isHorizontal = false;
+            longPressTriggered = false;
             closeSwipedRows(Number(row.getAttribute('data-item-id') || 0));
+            clearLongPress();
+            longPressTimer = window.setTimeout(() => {
+                longPressTriggered = true;
+                row.dataset.longPressTriggered = '1';
+                openEditModal(Number(row.getAttribute('data-item-id') || 0));
+            }, 420);
         }, {passive: true});
 
         track.addEventListener('touchmove', (event) => {
@@ -513,18 +888,30 @@ function bindShoppingSwipeRows() {
             if (!isHorizontal) {
                 isHorizontal = Math.abs(moveX) > Math.abs(moveY) && Math.abs(moveX) > 10;
             }
+            if (Math.abs(moveX) > 10 || Math.abs(moveY) > 10) {
+                clearLongPress();
+            }
             if (isHorizontal) {
                 deltaX = moveX;
             }
         }, {passive: true});
 
         track.addEventListener('touchend', () => {
+            clearLongPress();
             if (!isHorizontal) return;
             if (deltaX <= -45) {
                 row.classList.add('swiped');
             } else if (deltaX >= 30) {
                 row.classList.remove('swiped');
             }
+        });
+
+        track.addEventListener('touchcancel', () => {
+            clearLongPress();
+        });
+
+        track.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
         });
     });
 }
@@ -533,26 +920,44 @@ function renderSuggestions(rawQuery) {
     const el = document.getElementById('suggestions');
     if (!el) return;
     const query = normalizeSearchText(rawQuery);
+    const queryCompact = compactSearchText(rawQuery);
     if (!query) {
         el.style.display = 'none';
         el.innerHTML = '';
         return;
     }
 
-    const ranked = inventoryProducts
+    let ranked = inventoryProducts
         .map((p) => {
-            const name = String(p?.name || '').trim();
+            const name = String(p?.name || p?.product_name || '').trim();
             if (!name) return null;
+            const displayName = resolveInventorySuggestionName(p);
             const normName = normalizeSearchText(name);
+            const normDisplayName = normalizeSearchText(displayName);
             const normBrand = normalizeSearchText(p?.brand || '');
+            const compactName = compactSearchText(name);
+            const compactDisplayName = compactSearchText(displayName);
             let score = 0;
             if (normName.startsWith(query)) score += 30;
+            if (normDisplayName.startsWith(query)) score += 26;
             if (normName.includes(query)) score += 20;
+            if (normDisplayName.includes(query)) score += 18;
+            if (queryCompact && compactName.includes(queryCompact)) score += 16;
+            if (queryCompact && compactDisplayName.includes(queryCompact)) score += 16;
             if (normBrand.includes(query)) score += 10;
-            if (score <= 0) return null;
-            return {p, score};
+            return {p, score, displayName};
         })
-        .filter(Boolean)
+        .filter(Boolean);
+
+    const hasPositive = ranked.some((r) => Number(r?.score || 0) > 0);
+    if (hasPositive) {
+        ranked = ranked.filter((r) => Number(r?.score || 0) > 0);
+    } else if (query.length < 2) {
+        // For very short queries, avoid noisy fallback lists.
+        ranked = [];
+    }
+
+    ranked = ranked
         .sort((a, b) => b.score - a.score)
         .slice(0, 7);
 
@@ -562,26 +967,34 @@ function renderSuggestions(rawQuery) {
         return;
     }
 
-    el.innerHTML = ranked.map(({p}) => {
+    el.innerHTML = ranked.map(({p, displayName}) => {
         const id = Number(p?.id || 0);
         const name = String(p?.name || 'Ukendt vare');
+        const shownName = String(displayName || name);
         const brand = String(p?.brand || '').trim();
         const store = String(p?.offer_store || p?.standard_store || '').trim();
-        const meta = [brand, store].filter(Boolean).join(' · ') || 'Fra lager';
-        return `<div class="sg-item" data-action="add-sg" data-id="${id}" data-name="${esc(name)}" data-store="${esc(store)}">
+        const existing = isItemAlreadyOnShoppingList(id, name);
+        const baseMeta = [brand, store].filter(Boolean).join(' · ') || 'Fra lager';
+        const meta = existing ? (baseMeta + ' · Allerede på indkøbsseddel') : baseMeta;
+        const disabled = existing ? ' disabled' : '';
+        const cardClass = existing ? 'sg-item existing' : 'sg-item';
+        return `<div class="${cardClass}" data-action="add-sg" data-id="${id}" data-name="${esc(name)}" data-store="${esc(store)}" data-existing="${existing ? '1' : '0'}">
             <div>
-                <div class="sg-name">${esc(name)}</div>
+                <div class="sg-name">${esc(shownName)}</div>
                 <div class="sg-meta">${esc(meta)}</div>
             </div>
-            <button class="sg-add" type="button" data-action="add-sg" data-id="${id}" data-name="${esc(name)}" data-store="${esc(store)}">Tilføj</button>
+            <button class="sg-add" type="button" data-action="add-sg" data-id="${id}" data-name="${esc(name)}" data-store="${esc(store)}"${disabled}>${existing ? 'Allerede tilføjet' : 'Tilføj'}</button>
         </div>`;
     }).join('');
-    el.style.display = '';
+    el.style.display = 'block';
 }
 
 async function addItemByText(name) {
     const cleaned = String(name || '').trim();
     if (!cleaned) return;
+    if (isItemAlreadyOnShoppingList(0, cleaned)) {
+        throw new Error('Varen er allerede på indkøbssedlen');
+    }
     const qtyValue = Number(document.getElementById('addQty')?.value || 1);
     const quantity = Number.isFinite(qtyValue) && qtyValue > 0 ? Math.max(1, Math.round(qtyValue)) : 1;
     const priceRaw = String(document.getElementById('addPrice')?.value || '').trim();
@@ -609,6 +1022,9 @@ async function addItemByText(name) {
 }
 
 async function addItemFromInventory(productId, name, store) {
+    if (isItemAlreadyOnShoppingList(productId, name)) {
+        throw new Error('Varen er allerede på indkøbssedlen');
+    }
     const qtyValue = Number(document.getElementById('addQty')?.value || 1);
     const quantity = Number.isFinite(qtyValue) && qtyValue > 0 ? Math.max(1, Math.round(qtyValue)) : 1;
     const priceRaw = String(document.getElementById('addPrice')?.value || '').trim();
@@ -645,14 +1061,182 @@ async function addItemFromInventory(productId, name, store) {
 }
 
 async function refreshShopping() {
-    const payload = await apiGet(`api.php?endpoint=shopping.list&household_id=${encodeURIComponent(householdId || 1)}`);
+    const payload = await apiGet(`api.php?endpoint=shopping.list&household_id=${encodeURIComponent(householdId || 1)}&_ts=${Date.now()}`);
     shoppingItems = Array.isArray(payload?.items) ? payload.items : [];
     renderList(shoppingItems);
+    const addInput = document.getElementById('addInput');
+    if (addInput instanceof HTMLInputElement && addInput.value.trim() !== '') {
+        renderSuggestions(addInput.value);
+    }
 }
 
 async function refreshInventoryCache() {
     const payload = await apiGet(`api.php?endpoint=products&household_id=${encodeURIComponent(householdId || 1)}`);
     inventoryProducts = Array.isArray(payload?.products) ? payload.products : [];
+    const addInput = document.getElementById('addInput');
+    if (addInput instanceof HTMLInputElement && addInput.value.trim() !== '') {
+        renderSuggestions(addInput.value);
+    }
+}
+
+function closeOfferModal() {
+    const modal = document.getElementById('offerModal');
+    if (modal) {
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+    pendingOfferSelection = null;
+}
+
+async function fetchOfferSuggestions(itemId) {
+    const payload = await apiGet(`api.php?endpoint=shopping.list.offer_suggestions&household_id=${encodeURIComponent(householdId || 1)}&item_id=${encodeURIComponent(itemId)}&limit=8&_ts=${Date.now()}`);
+    return Array.isArray(payload?.suggestions) ? payload.suggestions : [];
+}
+
+function renderOfferOptions(options) {
+    const optionsEl = document.getElementById('offerOptions');
+    if (!optionsEl) return;
+
+    const rows = Array.isArray(options) ? options : [];
+    if (!rows.length) {
+        optionsEl.innerHTML = '<div class="offer-meta">Ingen tilbudsforslag fundet i andre butikker lige nu.</div>';
+        return;
+    }
+
+    optionsEl.innerHTML = rows.map((offer, index) => {
+        const offerId = Number(offer?.offer_id || 0);
+        const store = String(offer?.offer_store || '').trim();
+        const title = String(offer?.offer_title || 'Tilbud').trim();
+        const validTo = String(offer?.offer_valid_to || '').trim();
+        const hasPrice = offer?.offer_price !== null && offer?.offer_price !== undefined && !Number.isNaN(Number(offer.offer_price));
+        const price = hasPrice ? Number(offer.offer_price).toFixed(2).replace('.', ',') + ' kr' : '-';
+        const score = Number(offer?.score || 0);
+        const quality = score >= 90 ? 'Godt match' : 'Muligt match';
+        const storeClass = normalizeStoreClass(store);
+        const selected = index === 0 ? ' selected' : '';
+
+        return `<button class="offer-option${selected}" data-offer-option="1" data-offer-id="${offerId}" data-offer-store="${esc(store)}" data-offer-title="${esc(title)}" data-offer-price="${esc(price)}" data-offer-valid-to="${esc(validTo)}">
+            <span class="offer-logo${storeClass ? ' ' + storeClass : ''}">${esc(storeLogoText(store))}</span>
+            <span>
+                <span class="offer-option-title">${esc(title)}</span>
+                <span class="offer-option-meta">${esc(store || 'Butik')} · ${esc(quality)}${validTo ? ' · til ' + esc(validTo) : ''}</span>
+            </span>
+            <span class="offer-option-price">${esc(price)}</span>
+        </button>`;
+    }).join('');
+}
+
+function selectOfferOption(button) {
+    const optionsEl = document.getElementById('offerOptions');
+    const useBtn = document.getElementById('offerModalUse');
+    if (!optionsEl || !(button instanceof HTMLElement)) return;
+
+    optionsEl.querySelectorAll('[data-offer-option="1"]').forEach((el) => {
+        if (el instanceof HTMLElement) {
+            el.classList.toggle('selected', el === button);
+        }
+    });
+
+    if (!pendingOfferSelection) {
+        pendingOfferSelection = {};
+    }
+    pendingOfferSelection.offerId = Number(button.dataset.offerId || 0);
+    pendingOfferSelection.offerStore = String(button.dataset.offerStore || '');
+    pendingOfferSelection.offerTitle = String(button.dataset.offerTitle || '');
+    pendingOfferSelection.offerPrice = String(button.dataset.offerPrice || '');
+
+    if (useBtn) {
+        useBtn.disabled = !(Number(pendingOfferSelection.offerId || 0) > 0);
+    }
+}
+
+async function openOfferModal(offerData) {
+    pendingOfferSelection = offerData;
+    const modal = document.getElementById('offerModal');
+    const titleEl = document.getElementById('offerModalTitle');
+    const metaEl = document.getElementById('offerModalMeta');
+    const optionsEl = document.getElementById('offerOptions');
+    const useBtn = document.getElementById('offerModalUse');
+    if (!modal || !titleEl || !metaEl || !useBtn || !optionsEl) return;
+
+    titleEl.textContent = 'Tilbudsforslag';
+    metaEl.textContent = 'Henter forslag på tværs af butikker...';
+    optionsEl.innerHTML = '<div class="offer-meta">Søger tilbud...</div>';
+    useBtn.disabled = true;
+
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+
+    try {
+        const suggestions = await fetchOfferSuggestions(Number(offerData?.itemId || 0));
+        renderOfferOptions(suggestions);
+
+        const first = suggestions[0] || null;
+        if (first) {
+            pendingOfferSelection.offerId = Number(first.offer_id || 0);
+            pendingOfferSelection.offerStore = String(first.offer_store || '');
+            pendingOfferSelection.offerTitle = String(first.offer_title || '');
+            pendingOfferSelection.offerPrice = (first.offer_price !== null && first.offer_price !== undefined)
+                ? Number(first.offer_price).toFixed(2).replace('.', ',') + ' kr'
+                : '';
+            useBtn.disabled = !(pendingOfferSelection.offerId > 0);
+            metaEl.textContent = 'Vælg det tilbud du vil bruge på linjen.';
+        } else {
+            metaEl.textContent = 'Ingen forslag fundet lige nu.';
+            useBtn.disabled = true;
+        }
+    } catch (e) {
+        optionsEl.innerHTML = `<div class="offer-meta">Kunne ikke hente forslag: ${esc(String(e?.message || e))}</div>`;
+        metaEl.textContent = 'Prøv igen om lidt.';
+        useBtn.disabled = true;
+    }
+}
+
+async function applySelectedOffer() {
+    const selected = pendingOfferSelection;
+    if (!selected) return;
+    const offerId = Number(selected.offerId || 0);
+    const itemId = Number(selected.itemId || 0);
+    if (!offerId || !itemId) {
+        closeOfferModal();
+        return;
+    }
+
+    try {
+        await apiPost(`api.php?endpoint=shopping.list.apply_offer&household_id=${encodeURIComponent(householdId || 1)}`, {
+            item_id: itemId,
+            offer_id: offerId,
+        });
+        closeOfferModal();
+        setStatus('addStatus', 'Tilbud valgt for varen.');
+        await refreshShopping();
+    } catch (e) {
+        setStatus('addStatus', 'Kunne ikke anvende tilbud: ' + String(e?.message || e), true);
+    }
+}
+
+async function autoRefreshShoppingSilently() {
+    if (shoppingAutoRefreshInFlight || !accessToken) {
+        return;
+    }
+
+    const gate = document.getElementById('authGate');
+    if (gate && !gate.classList.contains('hidden')) {
+        return;
+    }
+
+    if (document.visibilityState === 'hidden') {
+        return;
+    }
+
+    shoppingAutoRefreshInFlight = true;
+    try {
+        await refreshShopping();
+    } catch (_) {
+        // Silent polling should not disturb user interaction.
+    } finally {
+        shoppingAutoRefreshInFlight = false;
+    }
 }
 
 async function requestCode(force = false) {
@@ -879,8 +1463,23 @@ addBtn?.addEventListener('click', async () => {
     }
 });
 
-addInput?.addEventListener('input', () => {
-    renderSuggestions(addInput.value || '');
+addInput?.addEventListener('input', async () => {
+    if (!inventoryProducts.length && (addInput.value || '').trim().length >= 2) {
+        try {
+            await refreshInventoryCache();
+        } catch (_) {}
+    }
+    try {
+        renderSuggestions(addInput.value || '');
+    } catch (e) {
+        setStatus('addStatus', 'Kunne ikke vise forslag: ' + String(e?.message || e), true);
+    }
+});
+
+addInput?.addEventListener('focus', () => {
+    if ((addInput.value || '').trim() !== '') {
+        renderSuggestions(addInput.value || '');
+    }
 });
 
 addInput?.addEventListener('keydown', async (e) => {
@@ -933,8 +1532,25 @@ document.getElementById('list')?.addEventListener('click', async (event) => {
     if (!id) return;
 
     const row = actionEl.closest('.item-shell');
+    if (row instanceof HTMLElement && row.dataset.longPressTriggered === '1') {
+        row.dataset.longPressTriggered = '';
+        return;
+    }
     if (action === 'toggle' && row instanceof HTMLElement && row.classList.contains('swiped')) {
         row.classList.remove('swiped');
+        return;
+    }
+
+    if (action === 'offer') {
+        event.preventDefault();
+        event.stopPropagation();
+        await openOfferModal({
+            itemId: id,
+            offerId: Number(actionEl.dataset.offerId || 0),
+            offerStore: String(actionEl.dataset.offerStore || ''),
+            offerTitle: String(actionEl.dataset.offerTitle || ''),
+            offerPrice: String(actionEl.dataset.offerPrice || ''),
+        });
         return;
     }
 
@@ -966,6 +1582,64 @@ document.getElementById('list')?.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
     target.click();
+});
+
+document.getElementById('offerModalDismiss')?.addEventListener('click', () => {
+    closeOfferModal();
+});
+
+document.getElementById('offerModalUse')?.addEventListener('click', async () => {
+    await applySelectedOffer();
+});
+
+document.getElementById('offerModal')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) {
+        closeOfferModal();
+    }
+});
+
+document.getElementById('editStorePicker')?.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const button = target.closest('.store-btn');
+    if (!(button instanceof HTMLElement)) return;
+    setEditStore(String(button.dataset.store || '').trim());
+});
+
+document.getElementById('editSaveBtn')?.addEventListener('click', async () => {
+    await saveEditedItem();
+});
+
+document.getElementById('editCancelBtn')?.addEventListener('click', () => {
+    closeEditModal();
+});
+
+document.getElementById('editModal')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) {
+        closeEditModal();
+    }
+});
+
+document.getElementById('offerOptions')?.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const option = target.closest('[data-offer-option="1"]');
+    if (!(option instanceof HTMLElement)) return;
+    selectOfferOption(option);
+});
+
+setInterval(() => {
+    void autoRefreshShoppingSilently();
+}, 5000);
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        void autoRefreshShoppingSilently();
+    }
+});
+
+window.addEventListener('focus', () => {
+    void autoRefreshShoppingSilently();
 });
 
 bootstrap();

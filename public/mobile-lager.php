@@ -66,41 +66,151 @@ declare(strict_types=1);
             border-radius: 12px;
             border: 1px solid var(--line);
             background: #111;
-            aspect-ratio: 4 / 3;
+            aspect-ratio: 16 / 9;
+            max-height: 200px;
         }
         video { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .scanline {
-            position: absolute;
-            left: 8%;
-            right: 8%;
-            top: 50%;
-            height: 2px;
-            background: rgba(89,255,164,0.95);
-            box-shadow: 0 0 10px rgba(89,255,164,0.95);
-            animation: sweep 2.2s linear infinite;
-        }
-        @keyframes sweep {
-            0% { transform: translateY(-70px); }
-            50% { transform: translateY(70px); }
-            100% { transform: translateY(-70px); }
-        }
         .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
         .btn-primary { border-color: var(--accent); color: var(--accent); font-weight: 700; }
 
+        #scanStatus {
+            font-size: 15px;
+            font-weight: 600;
+            min-height: 22px;
+            transition: background 0.2s;
+            border-radius: 8px;
+            padding: 6px 10px;
+        }
+        #scanStatus.flash-ok {
+            background: rgba(47,106,86,0.15);
+            color: var(--accent);
+        }
+        #scanStatus.flash-err {
+            background: rgba(192,57,43,0.12);
+            color: var(--danger);
+        }
+        .item.highlight {
+            border-color: var(--accent);
+            background: rgba(47,106,86,0.07);
+            box-shadow: 0 0 0 3px rgba(47,106,86,0.18);
+        }
         .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
         .item {
             border: 1px solid var(--line);
             border-radius: 12px;
+            padding: 0;
+            background: #fff;
+            position: relative;
+            overflow: hidden;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
+        }
+        .item-main {
             padding: 10px;
             background: #fff;
             display: grid;
             grid-template-columns: 1fr auto;
             gap: 8px;
             align-items: center;
+            transition: transform 0.18s ease;
+            will-change: transform;
+        }
+        .swipe-delete-wrap {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 92px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: stretch;
+            background: #c0392b;
+        }
+        .swipe-delete-btn {
+            width: 92px;
+            border: 0;
+            color: #fff;
+            background: transparent;
+            font-weight: 700;
+            font-size: 14px;
+        }
+        .item.swiped .item-main {
+            transform: translateX(-92px);
+        }
+        .item.edit-press .item-main {
+            filter: brightness(0.98);
+            border-color: var(--accent);
         }
         .name { margin: 0; font-size: 15px; font-weight: 700; }
         .meta { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
         .qty { font-size: 14px; font-weight: 700; color: var(--accent); }
+        .basis-chip {
+            margin-top: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+        .basis-chip input {
+            width: 16px;
+            height: 16px;
+        }
+        .basis-pill {
+            margin-top: 4px;
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            border: 1px solid rgba(47,106,86,0.35);
+            background: rgba(47,106,86,0.10);
+            color: var(--accent);
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .modal {
+            position: fixed;
+            inset: 0;
+            z-index: 80;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 14px;
+            background: rgba(14, 26, 20, 0.45);
+            backdrop-filter: blur(4px);
+        }
+        .modal.show { display: flex; }
+        .modal-card {
+            width: 100%;
+            max-width: 430px;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 12px;
+            display: grid;
+            gap: 8px;
+        }
+        .modal-title { margin: 0; font-size: 18px; }
+        .modal-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 4px;
+        }
+        .btn-danger {
+            border-color: rgba(192,57,43,0.45);
+            color: #c0392b;
+            background: rgba(192,57,43,0.06);
+            font-weight: 700;
+        }
+        .modal button {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
 
         .bottom-nav {
             position: fixed;
@@ -152,8 +262,19 @@ declare(strict_types=1);
             text-align: center;
         }
     </style>
+
 </head>
 <body>
+<script>
+// Pre-hide gate immediately if token exists — prevents login flash on tab switch
+(function(){
+    try {
+        if (window.localStorage.getItem('madAccessToken')) {
+            document.write('<style>#authGate{display:none!important}#app{aria-hidden:false}</style>');
+        }
+    } catch(_){}
+})();
+</script>
 <div id="authGate" class="auth-gate">
     <div class="auth-card">
         <h2>Log ind</h2>
@@ -177,17 +298,8 @@ declare(strict_types=1);
     </header>
 
     <section class="card stack" aria-label="Scanning">
-        <div class="controls">
-            <div class="seg">
-                <button id="modeIn" class="mode active" type="button">Ind</button>
-                <button id="modeOut" class="mode" type="button">Ud</button>
-            </div>
-            <select id="locationSelect"></select>
-        </div>
-
         <div class="camera">
             <video id="video" playsinline muted></video>
-            <div class="scanline"></div>
         </div>
 
         <div class="row">
@@ -200,10 +312,18 @@ declare(strict_types=1);
             <button id="manualSend" class="btn-primary" type="button">Scan</button>
         </div>
 
+        <div class="row">
+            <button id="createFromScanBtn" type="button">Opret vare</button>
+            <div id="createHint" class="status">Brug efter scanning, hvis varen ikke findes.</div>
+        </div>
+
         <div id="scanStatus" class="status">Klar.</div>
     </section>
 
     <section class="card" style="margin-top:10px" aria-label="Lageroversigt">
+        <div class="row" style="margin-bottom:8px">
+            <input id="searchInput" type="search" placeholder="Søg på lager…" autocomplete="off">
+        </div>
         <div class="status" id="invSummary"></div>
         <ul id="list" class="list"></ul>
     </section>
@@ -215,6 +335,38 @@ declare(strict_types=1);
         <a class="nav-btn active" href="mobile-lager.php">Lager</a>
     </div>
 </nav>
+
+<div id="editModal" class="modal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="Rediger lager vare">
+        <h3 class="modal-title">Juster lager</h3>
+        <div id="editItemName" class="status"></div>
+        <input id="editQty" type="number" min="0" step="0.1" placeholder="Antal">
+        <input id="editMinQty" type="number" min="0" step="0.1" placeholder="Minimum">
+        <label class="basis-chip" for="editIsBasis">
+            <input id="editIsBasis" type="checkbox">
+            <span>Basisvare</span>
+        </label>
+        <div class="modal-actions">
+            <button id="editSaveBtn" class="btn-primary" type="button">Gem</button>
+            <button id="editCancelBtn" type="button">Annuller</button>
+        </div>
+        <button id="editDeleteBtn" class="btn-danger" type="button">Slet vare fra lager</button>
+    </div>
+</div>
+
+<div id="createModal" class="modal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="Opret vare">
+        <h3 class="modal-title">Opret vare</h3>
+        <input id="createBarcode" type="text" inputmode="numeric" placeholder="Stregkode">
+        <input id="createName" type="text" placeholder="Varenavn (tom = automatisk opslag)">
+        <input id="createQty" type="number" min="0" step="0.1" value="1" placeholder="Antal">
+        <input id="createMinQty" type="number" min="0" step="0.1" value="0" placeholder="Minimum">
+        <div class="modal-actions">
+            <button id="createSaveBtn" class="btn-primary" type="button">Opret</button>
+            <button id="createCancelBtn" type="button">Annuller</button>
+        </div>
+    </div>
+</div>
 
 <script>
 const params = new URLSearchParams(window.location.search);
@@ -230,13 +382,16 @@ let gateLastRequestedAt = 0;
 let gateRequestInFlight = false;
 let gateAutoVerifyInFlight = false;
 let gateLastAutoVerifyCode = '';
-let movementType = 'in';
 let stream = null;
 let detector = null;
 let rafId = 0;
 let scanning = false;
 let lastSignature = '';
 let lastScanAt = 0;
+let pendingCreateBarcode = '';
+let pressTimer = 0;
+let pressTarget = null;
+let editTarget = null;
 
 function authHeaders() {
     const headers = {'Content-Type': 'application/json'};
@@ -260,6 +415,22 @@ function setStatus(elId, text, isErr = false) {
     if (!el) return;
     el.textContent = text;
     el.classList.toggle('err', !!isErr);
+}
+
+let flashTimer = 0;
+function flashStatus(elId, text, isErr = false) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle('err', !!isErr);
+    el.classList.remove('flash-ok', 'flash-err');
+    void el.offsetWidth; // force reflow
+    el.classList.add(isErr ? 'flash-err' : 'flash-ok');
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => {
+        el.classList.remove('flash-ok', 'flash-err');
+        el.textContent = 'Klar.';
+    }, 3500);
 }
 
 async function apiGet(url) {
@@ -452,9 +623,10 @@ async function resolveSession() {
     }
 }
 
-async function refreshInventory() {
+async function refreshInventory(highlightBc = null) {
     const data = await apiGet(`api.php?endpoint=products&household_id=${encodeURIComponent(householdId || 1)}`);
     const products = Array.isArray(data?.products) ? data.products : [];
+    allProducts = products;
     const list = document.getElementById('list');
     const summary = document.getElementById('invSummary');
     if (summary) {
@@ -469,50 +641,336 @@ async function refreshInventory() {
             const name = resolveProductDisplayName(p);
             const qty = Number(p?.quantity || 0);
             const min = Number(p?.minimum_quantity || 0);
+            const isBasis = Number(p?.is_basis || 0) === 1;
             const place = String(p?.location_name || '').trim();
             const meta = [place, 'min ' + min].filter(Boolean).join(' · ');
-            return `<li class="item"><div><p class="name">${esc(name)}</p><p class="meta">${esc(meta)}</p></div><div class="qty">${esc(String(qty))}</div></li>`;
+            const bc = esc(String(p?.barcode || ''));
+            const basisPill = isBasis ? '<span class="basis-pill">Basisvare</span>' : '';
+            return `<li class="item" data-product-id="${Number(p?.id || 0)}" data-location-id="${Number(p?.location_id || 0)}" data-qty="${qty}" data-min-qty="${min}" data-is-basis="${isBasis ? 1 : 0}" data-barcode="${bc}"><div class="swipe-delete-wrap"><button class="swipe-delete-btn" type="button" aria-label="Slet vare">Slet</button></div><div class="item-main"><div><p class="name">${esc(name)}</p><p class="meta">${esc(meta)}</p>${basisPill}</div><div class="qty">${esc(String(qty))}</div></div></li>`;
         }).join('');
-}
 
-async function refreshLocations() {
-    const data = await apiGet(`api.php?endpoint=location.list&household_id=${encodeURIComponent(householdId || 1)}`);
-    const locations = Array.isArray(data?.locations) ? data.locations : [];
-    const select = document.getElementById('locationSelect');
-    if (!select) return;
-    const fallback = [{id: 1, name: 'Køkken'}];
-    const rows = locations.length ? locations : fallback;
-    select.innerHTML = rows
-        .map((l) => `<option value="${Number(l?.id || 1)}">${esc(String(l?.name || 'Lokation'))}</option>`)
-        .join('');
+    // Re-apply active search filter after list rebuild
+    const searchQ = document.getElementById('searchInput')?.value || '';
+    if (searchQ) applySearch(searchQ);
+
+    if (highlightBc) {
+        const match = list.querySelector(`[data-barcode="${CSS.escape(String(highlightBc))}"]`);
+        if (match) {
+            match.classList.add('highlight');
+            match.scrollIntoView({behavior: 'smooth', block: 'center'});
+            setTimeout(() => match.classList.remove('highlight'), 4000);
+        }
+    }
+
+    bindInventoryItemGestures();
 }
 
 async function postScan(barcode) {
     const code = String(barcode || '').trim();
     if (!code) return;
     const now = Date.now();
-    const signature = movementType + ':' + code;
-    if (signature === lastSignature && (now - lastScanAt) < 1300) {
+    const signature = 'lookup:' + code;
+    if (signature === lastSignature && (now - lastScanAt) < 2000) {
         return;
     }
     lastSignature = signature;
     lastScanAt = now;
 
-    const locationId = Number(document.getElementById('locationSelect')?.value || 1) || 1;
-    setStatus('scanStatus', 'Sender scan: ' + code + ' (' + movementType + ')');
-    const payload = await apiPost('api.php?endpoint=scan', {
-        barcode: code,
-        household_id: Number(householdId || 1),
+    highlightBarcode(code);
+}
+
+function highlightBarcode(code) {
+    const list = document.getElementById('list');
+    if (!list) return;
+
+    // Remove previous highlight
+    list.querySelectorAll('.item.highlight').forEach(el => el.classList.remove('highlight'));
+
+    // Find matching item by barcode data attribute
+    const match = list.querySelector(`[data-barcode="${CSS.escape(code)}"]`);
+    if (match) {
+        match.classList.add('highlight');
+        // scrollIntoView with block:center so item lands in middle of screen
+        match.scrollIntoView({behavior: 'smooth', block: 'center'});
+        flashStatus('scanStatus', 'Fundet: ' + (match.querySelector('.name')?.textContent || code), false);
+        const createHint = document.getElementById('createHint');
+        if (createHint) {
+            createHint.textContent = 'Brug efter scanning, hvis varen ikke findes.';
+        }
+        // Remove highlight after 4 seconds
+        setTimeout(() => match.classList.remove('highlight'), 4000);
+    } else {
+        pendingCreateBarcode = code;
+        const createHint = document.getElementById('createHint');
+        if (createHint) {
+            createHint.textContent = 'Varen findes ikke. Tryk "Opret vare" for at oprette ' + code + '.';
+        }
+        flashStatus('scanStatus', 'Ikke på lager: ' + code, true);
+    }
+}
+
+function bindInventoryItemGestures() {
+    const list = document.getElementById('list');
+    if (!list) return;
+
+    const closeAllSwipes = (exceptItem = null) => {
+        list.querySelectorAll('.item.swiped').forEach((el) => {
+            if (exceptItem && el === exceptItem) return;
+            el.classList.remove('swiped');
+            const main = el.querySelector('.item-main');
+            if (main) {
+                main.style.transform = '';
+            }
+        });
+    };
+
+    list.querySelectorAll('.item').forEach((item) => {
+        const main = item.querySelector('.item-main');
+        const deleteBtn = item.querySelector('.swipe-delete-btn');
+        let startX = 0;
+        let startY = 0;
+        let deltaX = 0;
+        let swiping = false;
+        let moved = false;
+
+        const start = (e) => {
+            if (!e) return;
+            if (e.target?.closest?.('.swipe-delete-btn')) {
+                return;
+            }
+            const t = e.touches ? e.touches[0] : null;
+            startX = t ? t.clientX : (e.clientX || 0);
+            startY = t ? t.clientY : (e.clientY || 0);
+            deltaX = 0;
+            swiping = false;
+            moved = false;
+
+            clearTimeout(pressTimer);
+            pressTarget = item;
+            item.classList.add('edit-press');
+            closeAllSwipes(item);
+            pressTimer = window.setTimeout(() => {
+                openEditModal(item);
+            }, 430);
+        };
+
+        const cancel = (e) => {
+            if (swiping && e?.cancelable) e.preventDefault();
+            clearTimeout(pressTimer);
+            item.classList.remove('edit-press');
+
+            if (swiping) {
+                if (main) {
+                    main.style.transform = '';
+                }
+                if (deltaX < -46) {
+                    item.classList.add('swiped');
+                    closeAllSwipes(item);
+                } else {
+                    item.classList.remove('swiped');
+                }
+            }
+            swiping = false;
+        };
+
+        const move = (e) => {
+            if (!e) return;
+            const t = e.touches ? e.touches[0] : null;
+            const x = t ? t.clientX : (e.clientX || 0);
+            const y = t ? t.clientY : (e.clientY || 0);
+            const dx = x - startX;
+            const dy = y - startY;
+            deltaX = dx;
+
+            if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+                moved = true;
+                clearTimeout(pressTimer);
+                item.classList.remove('edit-press');
+            }
+
+            if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+                swiping = true;
+                if (e.cancelable) e.preventDefault();
+                const translate = Math.max(-92, Math.min(0, dx));
+                if (main) {
+                    main.style.transform = `translateX(${translate}px)`;
+                }
+            }
+        };
+
+        item.oncontextmenu = (e) => {
+            e.preventDefault();
+            openEditModal(item);
+            return false;
+        };
+
+        if (deleteBtn) {
+            deleteBtn.onclick = async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const productId = Number(item.dataset.productId || 0);
+                if (!productId) return;
+                const ok = window.confirm('Slet vare fra lager?');
+                if (!ok) return;
+                try {
+                    await apiPost('api.php?endpoint=inventory.delete&household_id=' + encodeURIComponent(householdId || 1), {
+                        product_id: productId,
+                    });
+                    flashStatus('scanStatus', 'Vare slettet fra lager.', false);
+                    await refreshInventory();
+                } catch (err) {
+                    flashStatus('scanStatus', 'Kunne ikke slette: ' + String(err?.message || err), true);
+                }
+            };
+        }
+
+        item.ontouchstart = start;
+        item.ontouchmove = move;
+        item.ontouchend = cancel;
+        item.ontouchcancel = cancel;
+        item.onmousedown = start;
+        item.onmousemove = move;
+        item.onmouseup = cancel;
+        item.onmouseleave = cancel;
+
+        item.onclick = (e) => {
+            if (item.classList.contains('swiped') && !e.target.closest('.swipe-delete-btn')) {
+                item.classList.remove('swiped');
+            } else if (!moved) {
+                closeAllSwipes(item);
+            }
+        };
+    });
+}
+
+function openEditModal(item) {
+    if (!item) return;
+    item.classList.remove('edit-press');
+    editTarget = item;
+    const name = item.querySelector('.name')?.textContent || 'Vare';
+    const qty = Number(item.dataset.qty || 0);
+    const minQty = Number(item.dataset.minQty || 0);
+    const isBasis = Number(item.dataset.isBasis || 0) === 1;
+
+    const nameEl = document.getElementById('editItemName');
+    if (nameEl) nameEl.textContent = name;
+    const qtyInput = document.getElementById('editQty');
+    const minInput = document.getElementById('editMinQty');
+    const basisInput = document.getElementById('editIsBasis');
+    if (qtyInput) qtyInput.value = String(qty);
+    if (minInput) minInput.value = String(minQty);
+    if (basisInput) basisInput.checked = isBasis;
+
+    // Clear accidental text selection from long-press before showing modal.
+    try {
+        window.getSelection()?.removeAllRanges();
+    } catch (_) {}
+
+    const modal = document.getElementById('editModal');
+    modal?.classList.add('show');
+    qtyInput?.focus();
+    qtyInput?.select();
+}
+
+function closeEditModal() {
+    document.getElementById('editModal')?.classList.remove('show');
+    editTarget = null;
+}
+
+async function saveEditModal() {
+    if (!editTarget) return;
+    const productId = Number(editTarget.dataset.productId || 0);
+    const locationId = Number(editTarget.dataset.locationId || 0);
+    const barcode = String(editTarget.dataset.barcode || '');
+    const qty = Number(document.getElementById('editQty')?.value || 0);
+    const minQty = Number(document.getElementById('editMinQty')?.value || 0);
+    const isBasis = !!document.getElementById('editIsBasis')?.checked;
+
+    await apiPost('api.php?endpoint=inventory.update_item&household_id=' + encodeURIComponent(householdId || 1), {
+        product_id: productId,
         location_id: locationId,
-        movement_type: movementType,
-        quantity: 1,
+        quantity: qty,
+        minimum_quantity: minQty,
+        is_basis: isBasis,
+    });
+    closeEditModal();
+    await refreshInventory(barcode || null);
+    flashStatus('scanStatus', 'Lager opdateret.', false);
+}
+
+async function deleteEditTarget() {
+    if (!editTarget) return;
+    const productId = Number(editTarget.dataset.productId || 0);
+    if (!productId) return;
+    await apiPost('api.php?endpoint=inventory.delete&household_id=' + encodeURIComponent(householdId || 1), {
+        product_id: productId,
+    });
+    closeEditModal();
+    await refreshInventory();
+    flashStatus('scanStatus', 'Vare slettet fra lager.', false);
+}
+
+function openCreateModal() {
+    const inputCode = String(document.getElementById('manualBarcode')?.value || '').trim();
+    const barcode = inputCode || pendingCreateBarcode || '';
+    const bcInput = document.getElementById('createBarcode');
+    if (bcInput) bcInput.value = barcode;
+    const qtyInput = document.getElementById('createQty');
+    const minInput = document.getElementById('createMinQty');
+    if (qtyInput && !qtyInput.value) qtyInput.value = '1';
+    if (minInput && !minInput.value) minInput.value = '0';
+    document.getElementById('createModal')?.classList.add('show');
+}
+
+function closeCreateModal() {
+    document.getElementById('createModal')?.classList.remove('show');
+}
+
+async function createItemFromModal() {
+    const barcode = String(document.getElementById('createBarcode')?.value || '').trim();
+    const name = String(document.getElementById('createName')?.value || '').trim();
+    const qty = Number(document.getElementById('createQty')?.value || 1);
+    const minQty = Number(document.getElementById('createMinQty')?.value || 0);
+
+    if (!barcode) {
+        flashStatus('scanStatus', 'Angiv stregkode.', true);
+        return;
+    }
+
+    const payload = await apiPost('api.php?endpoint=inventory.create_item&household_id=' + encodeURIComponent(householdId || 1), {
+        barcode,
+        name,
+        quantity: qty,
+        minimum_quantity: minQty,
     });
 
-    const autoAdded = !!payload?.auto_added_to_shopping_list;
-    const autoRemoved = !!payload?.auto_removed_from_shopping_list;
-    const suffix = autoAdded ? ' · tilføjet til indkøb' : (autoRemoved ? ' · fjernet fra indkøb' : '');
-    setStatus('scanStatus', 'Registreret: ' + code + ' (' + (movementType === 'out' ? 'ud' : 'ind') + ')' + suffix);
-    await refreshInventory();
+    pendingCreateBarcode = '';
+    const createHint = document.getElementById('createHint');
+    if (createHint) {
+        createHint.textContent = 'Brug efter scanning, hvis varen ikke findes.';
+    }
+    closeCreateModal();
+    const resolvedName = String(payload?.product_name || name || barcode);
+    flashStatus('scanStatus', 'Oprettet: ' + resolvedName, false);
+    await refreshInventory(barcode);
+}
+
+let allProducts = [];
+
+function applySearch(query) {
+    const q = String(query || '').toLowerCase().trim();
+    const list = document.getElementById('list');
+    if (!list) return;
+    list.querySelectorAll('.item').forEach(li => {
+        const name = String(li.querySelector('.name')?.textContent || '').toLowerCase();
+        const bc = String(li.dataset.barcode || '').toLowerCase();
+        li.style.display = (!q || name.includes(q) || bc.includes(q)) ? '' : 'none';
+    });
+    const visible = list.querySelectorAll('.item:not([style*="none"])').length;
+    const summary = document.getElementById('invSummary');
+    if (summary) {
+        summary.textContent = q ? `${visible} match` : (allProducts.length + ' varer på lager');
+    }
 }
 
 async function scanLoop() {
@@ -541,8 +999,17 @@ async function startCamera() {
     if (!(video instanceof HTMLVideoElement)) return;
 
     if (!('BarcodeDetector' in window)) {
-        setStatus('scanStatus', 'Denne browser understøtter ikke BarcodeDetector. Brug manuel scan.', true);
-        return;
+        setStatus('scanStatus', 'Indlæser scanner-modul…');
+        try {
+            await import('https://cdn.jsdelivr.net/npm/barcode-detector@3.1.3/dist/es/polyfill.js');
+        } catch (e) {
+            setStatus('scanStatus', 'Kunne ikke indlæse scanner: ' + String(e?.message || e), true);
+            return;
+        }
+        if (!('BarcodeDetector' in window)) {
+            setStatus('scanStatus', 'Stregkode-scanning ikke understøttet i denne browser.', true);
+            return;
+        }
     }
 
     detector = new BarcodeDetector({formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128']});
@@ -581,16 +1048,10 @@ function stopCamera() {
     setStatus('scanStatus', 'Kamera stoppet.');
 }
 
-function setMovement(next) {
-    movementType = next === 'out' ? 'out' : 'in';
-    document.getElementById('modeIn')?.classList.toggle('active', movementType === 'in');
-    document.getElementById('modeOut')?.classList.toggle('active', movementType === 'out');
-}
-
 async function bootstrap() {
     try {
         await resolveSession();
-        await Promise.all([refreshLocations(), refreshInventory()]);
+        await refreshInventory();
         unlockApp();
     } catch (e) {
         lockApp();
@@ -677,9 +1138,6 @@ document.getElementById('logoutBtn')?.addEventListener('click', () => {
     logoutApp();
 });
 
-document.getElementById('modeIn')?.addEventListener('click', () => setMovement('in'));
-document.getElementById('modeOut')?.addEventListener('click', () => setMovement('out'));
-
 document.getElementById('cameraBtn')?.addEventListener('click', async () => {
     try {
         await startCamera();
@@ -702,6 +1160,35 @@ document.getElementById('manualSend')?.addEventListener('click', async () => {
     }
 });
 
+document.getElementById('createFromScanBtn')?.addEventListener('click', () => {
+    openCreateModal();
+});
+
+document.getElementById('editCancelBtn')?.addEventListener('click', () => closeEditModal());
+document.getElementById('editSaveBtn')?.addEventListener('click', async () => {
+    try {
+        await saveEditModal();
+    } catch (e) {
+        flashStatus('scanStatus', 'Kunne ikke gemme: ' + String(e?.message || e), true);
+    }
+});
+document.getElementById('editDeleteBtn')?.addEventListener('click', async () => {
+    try {
+        await deleteEditTarget();
+    } catch (e) {
+        flashStatus('scanStatus', 'Kunne ikke slette: ' + String(e?.message || e), true);
+    }
+});
+
+document.getElementById('createCancelBtn')?.addEventListener('click', () => closeCreateModal());
+document.getElementById('createSaveBtn')?.addEventListener('click', async () => {
+    try {
+        await createItemFromModal();
+    } catch (e) {
+        flashStatus('scanStatus', 'Kunne ikke oprette: ' + String(e?.message || e), true);
+    }
+});
+
 document.getElementById('manualBarcode')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
         e.preventDefault();
@@ -711,6 +1198,10 @@ document.getElementById('manualBarcode')?.addEventListener('keydown', (e) => {
 
 window.addEventListener('pagehide', () => {
     stopCamera();
+});
+
+document.getElementById('searchInput')?.addEventListener('input', (e) => {
+    applySearch(e.target.value);
 });
 
 bootstrap();

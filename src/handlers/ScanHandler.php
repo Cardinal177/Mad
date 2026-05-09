@@ -214,6 +214,48 @@ function shoppingListItemsHasColumn(PDO $pdo, string $column): bool
     return $cache[$column];
 }
 
+function householdInventoryHasColumn(PDO $pdo, string $column): bool
+{
+    static $cache = [];
+
+    if (array_key_exists($column, $cache)) {
+        return $cache[$column];
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT 1
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = ?
+           AND COLUMN_NAME = ?
+         LIMIT 1'
+    );
+    $stmt->execute(['household_inventory', $column]);
+    $cache[$column] = (bool) $stmt->fetchColumn();
+
+    return $cache[$column];
+}
+
+function ensureHouseholdInventoryBasisColumn(PDO $pdo): void
+{
+    static $attempted = false;
+
+    if ($attempted) {
+        return;
+    }
+    $attempted = true;
+
+    try {
+        $pdo->exec('ALTER TABLE household_inventory ADD COLUMN IF NOT EXISTS is_basis TINYINT(1) NOT NULL DEFAULT 0');
+    } catch (Throwable $e) {
+        try {
+            $pdo->exec('ALTER TABLE household_inventory ADD COLUMN is_basis TINYINT(1) NOT NULL DEFAULT 0');
+        } catch (Throwable $inner) {
+            // Ignore: environments without ALTER permissions can still operate without basis toggle persistence.
+        }
+    }
+}
+
 function normalizeBarcode(string $rawBarcode): string
 {
     $barcode = trim($rawBarcode);
@@ -379,6 +421,7 @@ function getDeviceScanContext(): array
 
 function handleScan(PDO $pdo): void
 {
+    ensureHouseholdInventoryBasisColumn($pdo);
     $expectedDeviceToken = (string) (env_value('DEVICE_TOKEN', '') ?? '');
     $requestDeviceToken = (string) ($_SERVER['HTTP_X_DEVICE_TOKEN'] ?? '');
     if ($expectedDeviceToken !== '' && !hash_equals($expectedDeviceToken, $requestDeviceToken)) {
@@ -598,8 +641,11 @@ function handleScan(PDO $pdo): void
             'esp32',
         ]);
 
+        $inventorySelectCols = householdInventoryHasColumn($pdo, 'is_basis')
+            ? 'id, quantity, minimum_quantity, is_basis'
+            : 'id, quantity, minimum_quantity, 0 AS is_basis';
         $stmt = $pdo->prepare(
-            'SELECT id, quantity, minimum_quantity
+            'SELECT ' . $inventorySelectCols . '
              FROM household_inventory
              WHERE household_id = ? AND location_id = ? AND product_id = ?
              LIMIT 1'
@@ -623,9 +669,10 @@ function handleScan(PDO $pdo): void
             $quantityAfter = $newQuantity;
 
             $minimumQuantity = (float) ($inventory['minimum_quantity'] ?? 0);
-            if ($movementType === 'out' && $minimumQuantity > 0 && $newQuantity <= ($minimumQuantity + 0.0001)) {
+            $isBasis = (int) ($inventory['is_basis'] ?? 0) === 1;
+            if ($isBasis && $movementType === 'out' && $minimumQuantity > 0 && $newQuantity <= ($minimumQuantity + 0.0001)) {
                 $autoAddedToShoppingList = addProductToShoppingListIfMissing($pdo, $householdId, $productId, $resolvedProductName);
-            } elseif ($movementType === 'in' && $minimumQuantity > 0 && $newQuantity >= ($minimumQuantity - 0.0001)) {
+            } elseif ($isBasis && $movementType === 'in' && $minimumQuantity > 0 && $newQuantity >= ($minimumQuantity - 0.0001)) {
                 $autoRemovedFromShoppingList = removeProductFromOpenShoppingListIfPresent($pdo, $householdId, $productId);
             }
         } else {
@@ -673,6 +720,7 @@ function handleScan(PDO $pdo): void
 
 function handleProductList(PDO $pdo): void
 {
+    ensureHouseholdInventoryBasisColumn($pdo);
     $session = requireAuthenticatedSession($pdo);
     $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
     $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
@@ -688,6 +736,9 @@ function handleProductList(PDO $pdo): void
         $locationTypeSelect = scanLocationsHasColumn($pdo, 'location_type')
             ? 'hl.location_type'
             : 'NULL AS location_type';
+        $inventoryBasisSelect = householdInventoryHasColumn($pdo, 'is_basis')
+            ? 'hi.is_basis'
+            : '0 AS is_basis';
 
         if ($locationId !== null && $locationId > 0) {
             $stmt = $pdo->prepare('SELECT id FROM household_locations WHERE id = ? AND household_id = ? LIMIT 1');
@@ -724,6 +775,7 @@ function handleProductList(PDO $pdo): void
                 ' . $productWeightSelect . ',
                 hi.quantity,
                 hi.minimum_quantity,
+                ' . $inventoryBasisSelect . ',
                 hi.location_id,
                 hl.name AS location_name,
                 ' . $locationTypeSelect . ',
@@ -1209,6 +1261,30 @@ function handleShoppingList(PDO $pdo): void
                     ORDER BY so.created_at DESC, so.id DESC
                     LIMIT 1
                 ) AS fallback_offer_valid_to,
+                (
+                    SELECT so.title
+                    FROM store_offers so
+                    WHERE LOWER(TRIM(so.title)) = LOWER(TRIM(si.product_name))
+                      AND (
+                          si.preferred_store IS NULL
+                          OR TRIM(si.preferred_store) = ""
+                          OR LOWER(TRIM(so.store_name)) = LOWER(TRIM(si.preferred_store))
+                      )
+                    ORDER BY so.created_at DESC, so.id DESC
+                    LIMIT 1
+                ) AS fallback_offer_title,
+                (
+                    SELECT so.store_name
+                    FROM store_offers so
+                    WHERE LOWER(TRIM(so.title)) = LOWER(TRIM(si.product_name))
+                      AND (
+                          si.preferred_store IS NULL
+                          OR TRIM(si.preferred_store) = ""
+                          OR LOWER(TRIM(so.store_name)) = LOWER(TRIM(si.preferred_store))
+                      )
+                    ORDER BY so.created_at DESC, so.id DESC
+                    LIMIT 1
+                ) AS fallback_offer_store,
                 ' . $fallbackOfferIdSelect . '
              FROM shopping_list_items si
              LEFT JOIN products p ON p.id = si.product_id
@@ -1231,6 +1307,8 @@ function handleShoppingList(PDO $pdo): void
             $storedOfferId = isset($row['offer_id']) && $row['offer_id'] !== null ? (int) $row['offer_id'] : null;
             $storedOfferPrice = $row['offer_price'] !== null ? (float) $row['offer_price'] : null;
             $exactFallbackPrice = $row['fallback_offer_price'] !== null ? (float) $row['fallback_offer_price'] : null;
+            $fallbackOfferTitle = trim((string) ($row['fallback_offer_title'] ?? ''));
+            $fallbackOfferStore = trim((string) ($row['fallback_offer_store'] ?? ''));
 
             $offerSource = 'none';
             if ($storedOfferId !== null && $storedOfferId > 0) {
@@ -1250,13 +1328,14 @@ function handleShoppingList(PDO $pdo): void
                 'quantity' => max((float) ($row['quantity'] ?? 1), 1.0),
                 'preferred_store' => (string) ($row['preferred_store'] ?? ''),
                 'offer_id' => $storedOfferId,
+                'offer_title' => $fallbackOfferTitle,
                 'offer_price' => ($storedOfferPrice !== null)
                     ? $storedOfferPrice
                     : $exactFallbackPrice,
                 'offer_valid_to' => ($row['offer_valid_until'] !== null)
                     ? (string) $row['offer_valid_until']
                     : (($row['fallback_offer_valid_to'] !== null) ? (string) $row['fallback_offer_valid_to'] : null),
-                'offer_store' => '',
+                'offer_store' => $fallbackOfferStore,
                 'offer_source' => $offerSource,
                 'offer_match_score' => null,
                 'is_checked' => !empty($row['is_checked']),
@@ -1285,6 +1364,7 @@ function handleShoppingList(PDO $pdo): void
             $items[$index]['offer_price'] = $fallback['offer_price'];
             $items[$index]['offer_valid_to'] = $fallback['offer_valid_to'];
             $items[$index]['offer_store'] = $fallback['offer_store'];
+            $items[$index]['offer_title'] = (string) ($fallback['offer_title'] ?? '');
             $items[$index]['offer_source'] = (string) ($fallback['offer_source'] ?? 'fuzzy_fallback');
             $items[$index]['offer_match_score'] = isset($fallback['score']) ? (float) $fallback['score'] : null;
         }
@@ -1402,6 +1482,8 @@ function knownFoodKeywords(string $value): array
         'yoghurt' => true,
         'maelk' => true,
         'ost' => true,
+        'cremefraiche' => true,
+        'fraiche' => true,
         'smoer' => true,
         'floe' => true,
         'flode' => true,
@@ -1409,7 +1491,50 @@ function knownFoodKeywords(string $value): array
         'kakao' => true,
         'juice' => true,
         'cola' => true,
+        'sodavand' => true,
+        'vand' => true,
+        'mineralvand' => true,
+        'energidrik' => true,
+        'kaffe' => true,
+        'instantkaffe' => true,
+        'te' => true,
+        'chips' => true,
+        'snack' => true,
+        'snacks' => true,
+        'noedder' => true,
+        'nodder' => true,
+        'slik' => true,
+        'chokolade' => true,
+        'is' => true,
         'oel' => true,
+        'ol' => true,
+        'beer' => true,
+        'tuborg' => true,
+        'carlsberg' => true,
+        'heineken' => true,
+        'royal' => true,
+        'ale' => true,
+        'ipa' => true,
+        'lager' => true,
+        'pilsner' => true,
+        'classic' => true,
+        'ble' => true,
+        'bleer' => true,
+        'toiletpapir' => true,
+        'koekkenrulle' => true,
+        'kokkenrulle' => true,
+        'opvask' => true,
+        'opvasketabs' => true,
+        'opvaskemiddel' => true,
+        'vaskemiddel' => true,
+        'vaskepulver' => true,
+        'skyllemiddel' => true,
+        'rengoering' => true,
+        'rengoring' => true,
+        'shampoo' => true,
+        'balsam' => true,
+        'tandpasta' => true,
+        'saebe' => true,
         'broed' => true,
         'rugbroed' => true,
         'paalaeg' => true,
@@ -1428,9 +1553,70 @@ function knownFoodKeywords(string $value): array
         'tomat' => true,
         'kartoffel' => true,
         'loeg' => true,
+        'hvidloeg' => true,
+        'roedloeg' => true,
+        'foraarsloeg' => true,
+        'loeg' => true,
         'banan' => true,
         'aeble' => true,
         'agurk' => true,
+        'avocado' => true,
+        'avocadoer' => true,
+        'avokado' => true,
+        'avokadoer' => true,
+        'friture' => true,
+        'olie' => true,
+        'rapsolie' => true,
+        'solsikkeolie' => true,
+    ];
+
+    static $families = [
+        'oel' => ['ol', 'beer', 'tuborg', 'carlsberg', 'heineken', 'royal', 'ale', 'ipa', 'lager', 'pilsner', 'classic'],
+        'ol' => ['oel', 'beer', 'tuborg', 'carlsberg', 'heineken', 'royal', 'ale', 'ipa', 'lager', 'pilsner', 'classic'],
+        'beer' => ['oel', 'ol', 'tuborg', 'carlsberg', 'heineken', 'royal', 'ale', 'ipa', 'lager', 'pilsner', 'classic'],
+        'tuborg' => ['oel', 'ol', 'beer', 'lager', 'pilsner', 'classic'],
+        'carlsberg' => ['oel', 'ol', 'beer', 'lager', 'pilsner', 'classic'],
+        'heineken' => ['oel', 'ol', 'beer', 'lager', 'pilsner'],
+        'royal' => ['oel', 'ol', 'beer', 'lager', 'pilsner'],
+        'pilsner' => ['oel', 'ol', 'beer', 'lager', 'tuborg', 'carlsberg'],
+        'lager' => ['oel', 'ol', 'beer', 'pilsner', 'tuborg', 'carlsberg'],
+        'classic' => ['oel', 'ol', 'beer', 'tuborg', 'carlsberg'],
+        'sodavand' => ['cola', 'faxe', 'kondi', 'pepsi', 'coca', 'sprite', 'fanta', 'cocio', 'energidrik'],
+        'cola' => ['sodavand', 'pepsi', 'coca', 'cocacola'],
+        'vand' => ['mineralvand', 'kildevand', 'danskvand'],
+        'kaffe' => ['instantkaffe', 'nescafe', 'merrild', 'bki', 'lavazza'],
+        'te' => ['lipton', 'pickwick', 'earl', 'green'],
+        'cremefraiche' => ['fraiche', 'creme'],
+        'fraiche' => ['cremefraiche', 'creme'],
+        'chips' => ['snack', 'snacks', 'lays', 'kims', 'pringles', 'noedder', 'nodder'],
+        'snacks' => ['chips', 'kims', 'lays', 'pringles', 'noedder', 'nodder'],
+        'noedder' => ['snack', 'snacks', 'chips'],
+        'nodder' => ['snack', 'snacks', 'chips'],
+        'slik' => ['chokolade', 'haribo', 'matador', 'vingummi', 'lakrids'],
+        'chokolade' => ['slik', 'marabou', 'ritter', 'kitkat', 'twix'],
+        'opvask' => ['opvasketabs', 'opvaskemiddel', 'fairy', 'neophos', 'finish'],
+        'opvasketabs' => ['opvask', 'neophos', 'finish', 'fairy'],
+        'opvaskemiddel' => ['opvask', 'fairy', 'neutral'],
+        'vaskemiddel' => ['vaskepulver', 'omo', 'biotex', 'ariel', 'neutral', 'skyllemiddel'],
+        'vaskepulver' => ['vaskemiddel', 'omo', 'biotex', 'ariel'],
+        'skyllemiddel' => ['vaskemiddel', 'comfort', 'neutral'],
+        'rengoering' => ['ajax', 'cif', 'klorin', 'spray'],
+        'rengoring' => ['ajax', 'cif', 'klorin', 'spray'],
+        'toiletpapir' => ['koekkenrulle', 'kokkenrulle', 'lambi', 'lotus'],
+        'koekkenrulle' => ['toiletpapir', 'kokkenrulle', 'lambi', 'lotus'],
+        'kokkenrulle' => ['toiletpapir', 'koekkenrulle', 'lambi', 'lotus'],
+        'bleer' => ['ble', 'libero', 'pampers'],
+        'ble' => ['bleer', 'libero', 'pampers'],
+        'shampoo' => ['balsam', 'head', 'shoulders', 'pantene'],
+        'balsam' => ['shampoo', 'pantene', 'elvital'],
+        'tandpasta' => ['colgate', 'zendium', 'sensodyne'],
+        'avokado' => ['avocado'],
+        'avocado' => ['avokado'],
+        'avocadoer' => ['avocado', 'avokado', 'avokadoer'],
+        'avokadoer' => ['avocado', 'avocadoer', 'avokado'],
+        'friture' => ['olie', 'rapsolie', 'solsikkeolie'],
+        'olie' => ['friture', 'rapsolie', 'solsikkeolie', 'olivenolie'],
+        'loeg' => ['hvidloeg', 'roedloeg', 'foraarsloeg'],
     ];
 
     $tokens = shoppingMatchTokens($value);
@@ -1438,6 +1624,12 @@ function knownFoodKeywords(string $value): array
     foreach ($tokens as $token) {
         if (isset($known[$token])) {
             $hits[$token] = true;
+
+            if (isset($families[$token])) {
+                foreach ($families[$token] as $familyToken) {
+                    $hits[$familyToken] = true;
+                }
+            }
         }
     }
     return array_keys($hits);
@@ -1510,20 +1702,27 @@ function resolveBestOfferForShoppingItem(PDO $pdo, string $productName, string $
     foreach ($offers as $offer) {
         $title = (string) ($offer['title'] ?? '');
         $score = scoreShoppingTitleMatch($productName, $title);
+        $shoppingKeywords = knownFoodKeywords($productName);
+        $offerKeywords = knownFoodKeywords($title);
+        $keywordIntersect = ($shoppingKeywords !== [] && $offerKeywords !== [])
+            ? array_values(array_intersect($shoppingKeywords, $offerKeywords))
+            : [];
+
+        if ($keywordIntersect !== []) {
+            $score = max($score, 62.0 + min((count($keywordIntersect) - 1) * 6.0, 18.0));
+        }
+
         if ($score < 58.0) {
             continue;
         }
 
         $strongOverlap = hasStrongTokenOverlap($productName, $title);
-        if (!$strongOverlap && $score < 92.0) {
+        if (!$strongOverlap && $keywordIntersect === [] && $score < 92.0) {
             continue;
         }
 
-        $shoppingKeywords = knownFoodKeywords($productName);
-        $offerKeywords = knownFoodKeywords($title);
         if ($shoppingKeywords !== [] && $offerKeywords !== []) {
-            $intersect = array_intersect($shoppingKeywords, $offerKeywords);
-            if ($intersect === [] && $score < 99.0) {
+            if ($keywordIntersect === [] && $score < 99.0) {
                 continue;
             }
         }
@@ -1542,6 +1741,163 @@ function resolveBestOfferForShoppingItem(PDO $pdo, string $productName, string $
     }
 
     return $best;
+}
+
+function resolveOfferSuggestionsForShoppingItem(PDO $pdo, string $productName, int $limit = 8): array
+{
+    $normalizedName = normalizeShoppingMatchText($productName);
+    if ($normalizedName === '') {
+        return [];
+    }
+
+    if ($limit < 1) {
+        $limit = 1;
+    }
+    if ($limit > 20) {
+        $limit = 20;
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT id, store_name, title, price, valid_to, created_at
+         FROM store_offers
+         WHERE (valid_to IS NULL OR valid_to >= CURDATE())
+         ORDER BY created_at DESC, id DESC
+         LIMIT 800'
+    );
+    $stmt->execute();
+    $offers = $stmt->fetchAll() ?: [];
+
+    $candidates = [];
+    foreach ($offers as $offer) {
+        $title = (string) ($offer['title'] ?? '');
+        $score = scoreShoppingTitleMatch($productName, $title);
+        $shoppingKeywords = knownFoodKeywords($productName);
+        $offerKeywords = knownFoodKeywords($title);
+        $keywordIntersect = ($shoppingKeywords !== [] && $offerKeywords !== [])
+            ? array_values(array_intersect($shoppingKeywords, $offerKeywords))
+            : [];
+
+        if ($keywordIntersect !== []) {
+            $score = max($score, 62.0 + min((count($keywordIntersect) - 1) * 6.0, 18.0));
+        }
+
+        if ($score < 58.0) {
+            continue;
+        }
+
+        $strongOverlap = hasStrongTokenOverlap($productName, $title);
+        if (!$strongOverlap && $keywordIntersect === [] && $score < 92.0) {
+            continue;
+        }
+
+        if ($shoppingKeywords !== [] && $offerKeywords !== []) {
+            if ($keywordIntersect === [] && $score < 99.0) {
+                continue;
+            }
+        }
+
+        $candidates[] = [
+            'offer_id' => isset($offer['id']) ? (int) $offer['id'] : null,
+            'offer_store' => (string) ($offer['store_name'] ?? ''),
+            'offer_title' => $title,
+            'offer_price' => isset($offer['price']) ? (float) $offer['price'] : null,
+            'offer_valid_to' => $offer['valid_to'] !== null ? (string) $offer['valid_to'] : null,
+            'score' => $score,
+        ];
+    }
+
+    usort($candidates, static function (array $a, array $b): int {
+        $scoreCmp = (float) ($b['score'] ?? 0) <=> (float) ($a['score'] ?? 0);
+        if ($scoreCmp !== 0) {
+            return $scoreCmp;
+        }
+
+        $aPrice = $a['offer_price'] !== null ? (float) $a['offer_price'] : 999999.0;
+        $bPrice = $b['offer_price'] !== null ? (float) $b['offer_price'] : 999999.0;
+        return $aPrice <=> $bPrice;
+    });
+
+    $byStore = [];
+    $result = [];
+    foreach ($candidates as $candidate) {
+        $store = trim((string) ($candidate['offer_store'] ?? ''));
+        $storeKey = mb_strtolower($store, 'UTF-8');
+
+        // Keep the strongest candidate per store for cleaner cross-store choices.
+        if ($storeKey !== '') {
+            if (isset($byStore[$storeKey])) {
+                continue;
+            }
+            $byStore[$storeKey] = true;
+        }
+
+        $result[] = $candidate;
+        if (count($result) >= $limit) {
+            break;
+        }
+    }
+
+    return $result;
+}
+
+function handleShoppingListOfferSuggestions(PDO $pdo): void
+{
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    $itemId = isset($_GET['item_id']) ? (int) $_GET['item_id'] : 0;
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 6;
+
+    if ($itemId <= 0) {
+        response(400, ['error' => 'Missing or invalid item_id']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT si.id, si.product_name, p.name AS linked_product_name
+             FROM shopping_list_items si
+             INNER JOIN shopping_lists sl ON sl.id = si.shopping_list_id
+             LEFT JOIN products p ON p.id = si.product_id
+             WHERE si.id = ?
+               AND sl.household_id = ?
+               AND sl.status IN ("open", "in_progress")
+             LIMIT 1'
+        );
+        $stmt->execute([$itemId, $householdId]);
+        $item = $stmt->fetch();
+
+        if (!$item) {
+            response(404, ['error' => 'Shopping list item not found']);
+            return;
+        }
+
+        $productName = trim((string) ($item['linked_product_name'] ?? $item['product_name'] ?? ''));
+        if ($productName === '') {
+            response(200, [
+                'status' => 'ok',
+                'item_id' => $itemId,
+                'product_name' => '',
+                'suggestions' => [],
+            ]);
+            return;
+        }
+
+        $suggestions = resolveOfferSuggestionsForShoppingItem($pdo, $productName, $limit);
+
+        response(200, [
+            'status' => 'ok',
+            'item_id' => $itemId,
+            'product_name' => $productName,
+            'suggestions' => $suggestions,
+        ]);
+    } catch (Throwable $e) {
+        response(500, [
+            'error' => 'Database error',
+            'message' => $e->getMessage(),
+        ]);
+    }
 }
 
 function handleRecipeList(PDO $pdo): void
@@ -1766,27 +2122,374 @@ function handleShoppingListSetItemChecked(PDO $pdo): void
     }
 
     try {
+        $pdo->beginTransaction();
+
         $stmt = $pdo->prepare(
-            'UPDATE shopping_list_items si
+            'SELECT si.id, si.product_id, si.product_name, si.quantity, si.is_checked
+             FROM shopping_list_items si
              INNER JOIN shopping_lists sl ON sl.id = si.shopping_list_id
-             SET si.is_checked = ?
              WHERE si.id = ?
                AND sl.household_id = ?
-               AND sl.status IN ("open", "in_progress")'
+               AND sl.status IN ("open", "in_progress")
+             LIMIT 1'
         );
-        $stmt->execute([$isChecked, $itemId, $householdId]);
+        $stmt->execute([$itemId, $householdId]);
+        $itemRow = $stmt->fetch();
 
-        if ($stmt->rowCount() < 1) {
+        if (!$itemRow) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             response(404, ['error' => 'Shopping list item not found']);
             return;
         }
+
+        $wasChecked = !empty($itemRow['is_checked']) ? 1 : 0;
+        $stateChanged = ($wasChecked !== $isChecked);
+
+        if ($stateChanged) {
+            $stmt = $pdo->prepare(
+                'UPDATE shopping_list_items si
+                 INNER JOIN shopping_lists sl ON sl.id = si.shopping_list_id
+                 SET si.is_checked = ?
+                 WHERE si.id = ?
+                   AND sl.household_id = ?
+                   AND sl.status IN ("open", "in_progress")'
+            );
+            $stmt->execute([$isChecked, $itemId, $householdId]);
+        }
+
+        $inventoryUpdated = false;
+        $inventoryQuantityAdded = 0.0;
+        $inventoryProductId = isset($itemRow['product_id']) ? (int) $itemRow['product_id'] : 0;
+        $itemProductName = trim((string) ($itemRow['product_name'] ?? ''));
+
+        if ($isChecked === 1 && $wasChecked === 0 && $inventoryProductId <= 0 && $itemProductName !== '') {
+            $productLookupStmt = $pdo->prepare(
+                'SELECT id
+                 FROM products
+                 WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
+                 ORDER BY id ASC
+                 LIMIT 1'
+            );
+            $productLookupStmt->execute([$itemProductName]);
+            $productRow = $productLookupStmt->fetch();
+
+            if ($productRow) {
+                $inventoryProductId = (int) ($productRow['id'] ?? 0);
+            } else {
+                $createProductStmt = $pdo->prepare(
+                    'INSERT INTO products (barcode, name)
+                     VALUES (?, ?)' 
+                );
+                $createProductStmt->execute([null, $itemProductName]);
+                $inventoryProductId = (int) $pdo->lastInsertId();
+            }
+
+            if ($inventoryProductId > 0) {
+                $linkItemStmt = $pdo->prepare('UPDATE shopping_list_items SET product_id = ? WHERE id = ?');
+                $linkItemStmt->execute([$inventoryProductId, $itemId]);
+            }
+        }
+
+        // Only add to inventory on transition from unchecked -> checked.
+        if ($isChecked === 1 && $wasChecked === 0 && $inventoryProductId > 0) {
+            $quantityToAdd = (float) ($itemRow['quantity'] ?? 1);
+            if ($quantityToAdd < 1) {
+                $quantityToAdd = 1.0;
+            }
+
+            $locationStmt = $pdo->prepare(
+                'SELECT id
+                 FROM household_locations
+                 WHERE household_id = ?
+                 ORDER BY id ASC
+                 LIMIT 1'
+            );
+            $locationStmt->execute([$householdId]);
+            $locationRow = $locationStmt->fetch();
+            $locationId = $locationRow ? (int) ($locationRow['id'] ?? 0) : 0;
+
+            if ($locationId > 0) {
+                $inventoryStmt = $pdo->prepare(
+                    'SELECT id, quantity
+                     FROM household_inventory
+                     WHERE household_id = ? AND location_id = ? AND product_id = ?
+                     LIMIT 1'
+                );
+                $inventoryStmt->execute([$householdId, $locationId, $inventoryProductId]);
+                $inventoryRow = $inventoryStmt->fetch();
+
+                if ($inventoryRow) {
+                    $newQuantity = (float) ($inventoryRow['quantity'] ?? 0) + $quantityToAdd;
+                    $updateInventoryStmt = $pdo->prepare('UPDATE household_inventory SET quantity = ? WHERE id = ?');
+                    $updateInventoryStmt->execute([$newQuantity, (int) $inventoryRow['id']]);
+                } else {
+                    $insertInventoryStmt = $pdo->prepare(
+                        'INSERT INTO household_inventory (household_id, location_id, product_id, quantity)
+                         VALUES (?, ?, ?, ?)'
+                    );
+                    $insertInventoryStmt->execute([$householdId, $locationId, $inventoryProductId, $quantityToAdd]);
+                }
+
+                $movementStmt = $pdo->prepare(
+                    'INSERT INTO inventory_movements (household_id, location_id, product_id, user_id, movement_type, quantity_delta, source)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)' 
+                );
+                $movementStmt->execute([
+                    $householdId,
+                    $locationId,
+                    $inventoryProductId,
+                    isset($session['user_id']) ? (int) $session['user_id'] : null,
+                    'in',
+                    $quantityToAdd,
+                    'manual',
+                ]);
+
+                $inventoryUpdated = true;
+                $inventoryQuantityAdded = $quantityToAdd;
+            }
+        }
+
+        $pdo->commit();
 
         response(200, [
             'status' => 'ok',
             'item_id' => $itemId,
             'is_checked' => (bool) $isChecked,
+            'state_changed' => (bool) $stateChanged,
+            'inventory_updated' => $inventoryUpdated,
+            'inventory_product_id' => $inventoryProductId > 0 ? $inventoryProductId : null,
+            'inventory_quantity_added' => $inventoryQuantityAdded,
         ]);
     } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        response(500, [
+            'error' => 'Database error',
+            'message' => $e->getMessage(),
+        ]);
+    }
+}
+
+function handleShoppingListApplyOffer(PDO $pdo): void
+{
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    $data = parseJsonInput();
+    $itemId = (int) ($data['item_id'] ?? 0);
+    $offerId = (int) ($data['offer_id'] ?? 0);
+
+    if ($itemId <= 0 || $offerId <= 0) {
+        response(400, ['error' => 'Missing or invalid item_id or offer_id']);
+        return;
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $itemStmt = $pdo->prepare(
+            'SELECT si.id
+             FROM shopping_list_items si
+             INNER JOIN shopping_lists sl ON sl.id = si.shopping_list_id
+             WHERE si.id = ?
+               AND sl.household_id = ?
+               AND sl.status IN ("open", "in_progress")
+             LIMIT 1'
+        );
+        $itemStmt->execute([$itemId, $householdId]);
+        if (!$itemStmt->fetch()) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            response(404, ['error' => 'Shopping list item not found']);
+            return;
+        }
+
+        $offerStmt = $pdo->prepare(
+            'SELECT id, store_name, title, price, valid_to
+             FROM store_offers
+             WHERE id = ?
+             LIMIT 1'
+        );
+        $offerStmt->execute([$offerId]);
+        $offer = $offerStmt->fetch();
+        if (!$offer) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            response(404, ['error' => 'Offer not found']);
+            return;
+        }
+
+        $offerStore = trim((string) ($offer['store_name'] ?? ''));
+        $offerPrice = isset($offer['price']) ? (float) $offer['price'] : null;
+        $offerValidTo = $offer['valid_to'] !== null ? (string) $offer['valid_to'] : null;
+        $hasOfferIdColumn = shoppingListItemsHasColumn($pdo, 'offer_id');
+
+        if ($hasOfferIdColumn) {
+            $updateStmt = $pdo->prepare(
+                'UPDATE shopping_list_items
+                 SET preferred_store = ?,
+                     offer_id = ?,
+                     offer_price = ?,
+                     offer_valid_until = ?
+                 WHERE id = ?'
+            );
+            $updateStmt->execute([
+                $offerStore !== '' ? $offerStore : null,
+                (int) $offer['id'],
+                $offerPrice,
+                $offerValidTo,
+                $itemId,
+            ]);
+        } else {
+            $updateStmt = $pdo->prepare(
+                'UPDATE shopping_list_items
+                 SET preferred_store = ?,
+                     offer_price = ?,
+                     offer_valid_until = ?
+                 WHERE id = ?'
+            );
+            $updateStmt->execute([
+                $offerStore !== '' ? $offerStore : null,
+                $offerPrice,
+                $offerValidTo,
+                $itemId,
+            ]);
+        }
+
+        $pdo->commit();
+
+        response(200, [
+            'status' => 'ok',
+            'item_id' => $itemId,
+            'offer_id' => (int) ($offer['id'] ?? 0),
+            'offer_store' => $offerStore,
+            'offer_title' => (string) ($offer['title'] ?? ''),
+            'offer_price' => $offerPrice,
+            'offer_valid_to' => $offerValidTo,
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        response(500, [
+            'error' => 'Database error',
+            'message' => $e->getMessage(),
+        ]);
+    }
+}
+
+function handleShoppingListUpdateItem(PDO $pdo): void
+{
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    $data = parseJsonInput();
+    $itemId = (int) ($data['item_id'] ?? 0);
+    $quantity = (int) ($data['quantity'] ?? 0);
+    $preferredStore = trim((string) ($data['store'] ?? ''));
+
+    if ($itemId <= 0) {
+        response(400, ['error' => 'Missing or invalid item_id']);
+        return;
+    }
+
+    if ($quantity < 1) {
+        response(400, ['error' => 'Quantity must be at least 1']);
+        return;
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $stmt = $pdo->prepare(
+            'SELECT si.id, si.preferred_store
+             FROM shopping_list_items si
+             INNER JOIN shopping_lists sl ON sl.id = si.shopping_list_id
+             WHERE si.id = ?
+               AND sl.household_id = ?
+               AND sl.status IN ("open", "in_progress")
+             LIMIT 1'
+        );
+        $stmt->execute([$itemId, $householdId]);
+        $itemRow = $stmt->fetch();
+
+        if (!$itemRow) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            response(404, ['error' => 'Shopping list item not found']);
+            return;
+        }
+
+        $existingStore = trim((string) ($itemRow['preferred_store'] ?? ''));
+        $storeChanged = mb_strtolower($existingStore, 'UTF-8') !== mb_strtolower($preferredStore, 'UTF-8');
+        $hasOfferIdColumn = shoppingListItemsHasColumn($pdo, 'offer_id');
+
+        if ($storeChanged) {
+            if ($hasOfferIdColumn) {
+                $updateStmt = $pdo->prepare(
+                    'UPDATE shopping_list_items
+                     SET quantity = ?,
+                         preferred_store = ?,
+                         offer_id = NULL,
+                         offer_price = NULL,
+                         offer_valid_until = NULL
+                     WHERE id = ?'
+                );
+                $updateStmt->execute([
+                    $quantity,
+                    $preferredStore !== '' ? $preferredStore : null,
+                    $itemId,
+                ]);
+            } else {
+                $updateStmt = $pdo->prepare(
+                    'UPDATE shopping_list_items
+                     SET quantity = ?,
+                         preferred_store = ?,
+                         offer_price = NULL,
+                         offer_valid_until = NULL
+                     WHERE id = ?'
+                );
+                $updateStmt->execute([
+                    $quantity,
+                    $preferredStore !== '' ? $preferredStore : null,
+                    $itemId,
+                ]);
+            }
+        } else {
+            $updateStmt = $pdo->prepare(
+                'UPDATE shopping_list_items
+                 SET quantity = ?,
+                     preferred_store = ?
+                 WHERE id = ?'
+            );
+            $updateStmt->execute([
+                $quantity,
+                $preferredStore !== '' ? $preferredStore : null,
+                $itemId,
+            ]);
+        }
+
+        $pdo->commit();
+
+        response(200, [
+            'status' => 'ok',
+            'item_id' => $itemId,
+            'quantity' => $quantity,
+            'preferred_store' => $preferredStore,
+            'store_changed' => $storeChanged,
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         response(500, [
             'error' => 'Database error',
             'message' => $e->getMessage(),
@@ -1860,6 +2563,243 @@ function handleInventoryDelete(PDO $pdo): void
             'status' => 'ok',
             'product_id' => $productId,
             'deleted' => true,
+        ]);
+    } catch (Throwable $e) {
+        response(500, [
+            'error' => 'Database error',
+            'message' => $e->getMessage(),
+        ]);
+    }
+}
+
+function handleInventoryUpdateItem(PDO $pdo): void
+{
+    ensureHouseholdInventoryBasisColumn($pdo);
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    $data = parseJsonInput();
+    $productId = (int) ($data['product_id'] ?? 0);
+    $requestedLocationId = (int) ($data['location_id'] ?? 0);
+    $quantity = max(0.0, (float) ($data['quantity'] ?? 0));
+    $minimumQuantity = max(0.0, (float) ($data['minimum_quantity'] ?? 0));
+    $isBasis = !empty($data['is_basis']) ? 1 : 0;
+
+    if ($productId <= 0) {
+        response(400, ['error' => 'Missing or invalid product_id']);
+        return;
+    }
+
+    try {
+        $locationId = 0;
+        if ($requestedLocationId > 0) {
+            $stmt = $pdo->prepare('SELECT id FROM household_locations WHERE id = ? AND household_id = ? LIMIT 1');
+            $stmt->execute([$requestedLocationId, $householdId]);
+            if (!$stmt->fetch()) {
+                response(403, ['error' => 'Forbidden location']);
+                return;
+            }
+            $locationId = $requestedLocationId;
+        } else {
+            $stmt = $pdo->prepare('SELECT location_id FROM household_inventory WHERE household_id = ? AND product_id = ? ORDER BY id ASC LIMIT 1');
+            $stmt->execute([$householdId, $productId]);
+            $row = $stmt->fetch();
+            if ($row && isset($row['location_id'])) {
+                $locationId = (int) $row['location_id'];
+            }
+            if ($locationId <= 0) {
+                $fallbackStmt = $pdo->prepare(
+                    'SELECT id
+                     FROM household_locations
+                     WHERE household_id = ?
+                     ORDER BY id ASC
+                     LIMIT 1'
+                );
+                $fallbackStmt->execute([$householdId]);
+                $fallback = $fallbackStmt->fetch();
+                if (!$fallback) {
+                    response(404, ['error' => 'Location not found for household']);
+                    return;
+                }
+                $locationId = (int) $fallback['id'];
+            }
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT id
+             FROM household_inventory
+             WHERE household_id = ? AND location_id = ? AND product_id = ?
+             LIMIT 1'
+        );
+        $stmt->execute([$householdId, $locationId, $productId]);
+        $existing = $stmt->fetch();
+
+        if ($existing) {
+            if (householdInventoryHasColumn($pdo, 'is_basis')) {
+                $stmt = $pdo->prepare('UPDATE household_inventory SET quantity = ?, minimum_quantity = ?, is_basis = ? WHERE id = ?');
+                $stmt->execute([$quantity, $minimumQuantity, $isBasis, (int) $existing['id']]);
+            } else {
+                $stmt = $pdo->prepare('UPDATE household_inventory SET quantity = ?, minimum_quantity = ? WHERE id = ?');
+                $stmt->execute([$quantity, $minimumQuantity, (int) $existing['id']]);
+            }
+        } else {
+            if (householdInventoryHasColumn($pdo, 'is_basis')) {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO household_inventory (household_id, location_id, product_id, quantity, minimum_quantity, is_basis)
+                     VALUES (?, ?, ?, ?, ?, ?)'
+                );
+                $stmt->execute([$householdId, $locationId, $productId, $quantity, $minimumQuantity, $isBasis]);
+            } else {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO household_inventory (household_id, location_id, product_id, quantity, minimum_quantity)
+                     VALUES (?, ?, ?, ?, ?)'
+                );
+                $stmt->execute([$householdId, $locationId, $productId, $quantity, $minimumQuantity]);
+            }
+        }
+
+        response(200, [
+            'status' => 'ok',
+            'product_id' => $productId,
+            'location_id' => $locationId,
+            'quantity' => $quantity,
+            'minimum_quantity' => $minimumQuantity,
+            'is_basis' => $isBasis,
+        ]);
+    } catch (Throwable $e) {
+        response(500, [
+            'error' => 'Database error',
+            'message' => $e->getMessage(),
+        ]);
+    }
+}
+
+function handleInventoryCreateItem(PDO $pdo): void
+{
+    ensureHouseholdInventoryBasisColumn($pdo);
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    $data = parseJsonInput();
+    $rawBarcode = (string) ($data['barcode'] ?? '');
+    $barcode = normalizeBarcode($rawBarcode);
+    $providedName = trim((string) ($data['name'] ?? ''));
+    $quantity = max(0.0, (float) ($data['quantity'] ?? 1));
+    $minimumQuantity = max(0.0, (float) ($data['minimum_quantity'] ?? 0));
+    $isBasis = !empty($data['is_basis']) ? 1 : 0;
+    $requestedLocationId = (int) ($data['location_id'] ?? 0);
+
+    if ($barcode === '') {
+        response(400, ['error' => 'Missing barcode']);
+        return;
+    }
+
+    try {
+        $locationId = 0;
+        if ($requestedLocationId > 0) {
+            $stmt = $pdo->prepare('SELECT id FROM household_locations WHERE id = ? AND household_id = ? LIMIT 1');
+            $stmt->execute([$requestedLocationId, $householdId]);
+            if (!$stmt->fetch()) {
+                response(403, ['error' => 'Forbidden location']);
+                return;
+            }
+            $locationId = $requestedLocationId;
+        } else {
+            $fallbackStmt = $pdo->prepare(
+                'SELECT id
+                 FROM household_locations
+                 WHERE household_id = ?
+                 ORDER BY id ASC
+                 LIMIT 1'
+            );
+            $fallbackStmt->execute([$householdId]);
+            $fallback = $fallbackStmt->fetch();
+            if (!$fallback) {
+                response(404, ['error' => 'Location not found for household']);
+                return;
+            }
+            $locationId = (int) $fallback['id'];
+        }
+
+        $stmt = $pdo->prepare('SELECT id, name FROM products WHERE barcode = ? LIMIT 1');
+        $stmt->execute([$barcode]);
+        $product = $stmt->fetch();
+
+        $createdProduct = false;
+        $resolvedName = $providedName;
+
+        if (!$product) {
+            if ($resolvedName === '') {
+                $offProduct = fetchOpenFoodFactsProduct($barcode);
+                $resolvedName = trim((string) ($offProduct['name'] ?? ''));
+            }
+            if ($resolvedName === '') {
+                $resolvedName = placeholderProductName($barcode);
+            }
+
+            $stmt = $pdo->prepare('INSERT INTO products (barcode, name, brand, image_url, nutrition_json) VALUES (?, ?, ?, ?, ?)');
+            $stmt->execute([$barcode, $resolvedName, null, null, null]);
+            $productId = (int) $pdo->lastInsertId();
+            $createdProduct = true;
+        } else {
+            $productId = (int) ($product['id'] ?? 0);
+            $resolvedName = trim((string) ($product['name'] ?? ''));
+
+            if ($providedName !== '' && $productId > 0) {
+                $stmt = $pdo->prepare('UPDATE products SET name = ? WHERE id = ?');
+                $stmt->execute([$providedName, $productId]);
+                $resolvedName = $providedName;
+            }
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT id
+             FROM household_inventory
+             WHERE household_id = ? AND location_id = ? AND product_id = ?
+             LIMIT 1'
+        );
+        $stmt->execute([$householdId, $locationId, $productId]);
+        $inventory = $stmt->fetch();
+
+        if ($inventory) {
+            if (householdInventoryHasColumn($pdo, 'is_basis')) {
+                $stmt = $pdo->prepare('UPDATE household_inventory SET quantity = ?, minimum_quantity = ?, is_basis = ? WHERE id = ?');
+                $stmt->execute([$quantity, $minimumQuantity, $isBasis, (int) $inventory['id']]);
+            } else {
+                $stmt = $pdo->prepare('UPDATE household_inventory SET quantity = ?, minimum_quantity = ? WHERE id = ?');
+                $stmt->execute([$quantity, $minimumQuantity, (int) $inventory['id']]);
+            }
+            $createdInventory = false;
+        } else {
+            if (householdInventoryHasColumn($pdo, 'is_basis')) {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO household_inventory (household_id, location_id, product_id, quantity, minimum_quantity, is_basis)
+                     VALUES (?, ?, ?, ?, ?, ?)'
+                );
+                $stmt->execute([$householdId, $locationId, $productId, $quantity, $minimumQuantity, $isBasis]);
+            } else {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO household_inventory (household_id, location_id, product_id, quantity, minimum_quantity)
+                     VALUES (?, ?, ?, ?, ?)'
+                );
+                $stmt->execute([$householdId, $locationId, $productId, $quantity, $minimumQuantity]);
+            }
+            $createdInventory = true;
+        }
+
+        response(201, [
+            'status' => 'ok',
+            'barcode' => $barcode,
+            'product_id' => $productId,
+            'product_name' => $resolvedName,
+            'created_product' => $createdProduct,
+            'created_inventory' => $createdInventory,
+            'location_id' => $locationId,
+            'quantity' => $quantity,
+            'minimum_quantity' => $minimumQuantity,
+            'is_basis' => $isBasis,
         ]);
     } catch (Throwable $e) {
         response(500, [
