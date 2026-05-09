@@ -2548,11 +2548,38 @@ function renderProducts(products) {
         const weightValue = Number(product.weight_grams ?? 0);
         const hasWeight = Number.isFinite(weightValue) && weightValue > 0;
         const infoLine = [product.brand, locationBadge ? (product.location_name || '') : '', typeBadge ? '' : ''].filter(Boolean).join(' · ');
+        
+        // Strip brand from product name for display
+        const normWords = (s) => s
+            .replace(/([a-z])([A-Z])/g, '$1 $2')
+            .toLowerCase()
+            .replace(/[^a-z0-9æøå\s]/g, ' ')
+            .split(/\s+/)
+            .filter(Boolean);
+        const stripBrand = (name, brand) => {
+            if (!brand || !name) return name;
+            const brandWords = normWords(brand);
+            const nameWords = name.split(/\s+/);
+            if (!brandWords.length || !nameWords.length) return name;
+            let consumed = 0, bi = 0;
+            for (let ni = 0; ni < nameWords.length && bi < brandWords.length; ni++) {
+                const nw = normWords(nameWords[ni]);
+                if (nw.length === 1 && nw[0] === brandWords[bi]) {
+                    consumed = ni + 1; bi++;
+                } else if (nw.join('') === brandWords.slice(bi, bi + nw.length).join('')) {
+                    consumed = ni + 1; bi += nw.length;
+                } else break;
+            }
+            const stripped = nameWords.slice(consumed).join(' ').trim();
+            return stripped.length > 2 ? stripped : name;
+        };
+        const displayName = stripBrand(product.name || 'Ukendt vare', product.brand || '');
+        
         return `<article class="inventory-card" data-product-id="${esc(String(product.id || ''))}" data-location-id="${esc(String(product.location_id || ''))}" data-barcode="${esc(String(product.barcode || ''))}">
             <div class="inventory-visual">
                 ${image}
                 <div>
-                    <h3 class="inventory-name">${esc(product.name || 'Ukendt vare')}</h3>
+                    <h3 class="inventory-name">${esc(displayName)}</h3>
                     <p class="inventory-brand">${[product.brand, product.location_name ? (locationTypeIcon(product.location_type) + ' ' + product.location_name) : ''].filter(Boolean).join(' · ')}</p>
                 </div>
                 <div class="inventory-qty-col">
