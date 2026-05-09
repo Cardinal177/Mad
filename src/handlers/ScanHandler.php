@@ -193,6 +193,62 @@ function persistLastDeviceScan(string $barcode, string $movementType, int $house
     @file_put_contents($scanFile, $content);
 }
 
+function getOrCreateOpenShoppingListId(PDO $pdo, int $householdId): int
+{
+    $stmt = $pdo->prepare(
+        'SELECT id
+         FROM shopping_lists
+         WHERE household_id = ? AND status = "open"
+         ORDER BY created_at DESC
+         LIMIT 1'
+    );
+    $stmt->execute([$householdId]);
+    $existing = $stmt->fetch();
+    if ($existing) {
+        return (int) $existing['id'];
+    }
+
+    $stmt = $pdo->prepare(
+        'INSERT INTO shopping_lists (household_id, title, status, created_by_user_id)
+         VALUES (?, ?, ?, NULL)'
+    );
+    $stmt->execute([
+        $householdId,
+        'Indkøbsseddel ' . date('d. M Y'),
+        'open',
+    ]);
+
+    return (int) $pdo->lastInsertId();
+}
+
+function addProductToShoppingListIfMissing(PDO $pdo, int $householdId, int $productId, string $productName): bool
+{
+    if ($productId <= 0 || trim($productName) === '') {
+        return false;
+    }
+
+    $shoppingListId = getOrCreateOpenShoppingListId($pdo, $householdId);
+
+    $stmt = $pdo->prepare(
+        'SELECT id
+         FROM shopping_list_items
+         WHERE shopping_list_id = ? AND product_id = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$shoppingListId, $productId]);
+    if ($stmt->fetch()) {
+        return false;
+    }
+
+    $stmt = $pdo->prepare(
+        'INSERT INTO shopping_list_items (shopping_list_id, product_id, product_name, quantity, preferred_store)
+         VALUES (?, ?, ?, ?, NULL)'
+    );
+    $stmt->execute([$shoppingListId, $productId, trim($productName), 1]);
+
+    return true;
+}
+
 function handleScan(PDO $pdo): void
 {
     $expectedDeviceToken = (string) (env_value('DEVICE_TOKEN', '') ?? '');
@@ -248,6 +304,7 @@ function handleScan(PDO $pdo): void
         $stmt = $pdo->prepare('SELECT id, name, brand, image_url, nutrition_json FROM products WHERE barcode = ? LIMIT 1');
         $stmt->execute([$barcode]);
         $product = $stmt->fetch();
+        $resolvedProductName = '';
 
         if (!$product) {
             $offProduct = fetchOpenFoodFactsProduct($barcode);
@@ -279,8 +336,10 @@ function handleScan(PDO $pdo): void
                 $stmt->execute([$barcode, $name, $brand, $imageUrl, $nutritionJson]);
             }
             $productId = (int) $pdo->lastInsertId();
+            $resolvedProductName = $name;
         } else {
             $productId = (int) $product['id'];
+            $resolvedProductName = (string) ($product['name'] ?? '');
 
             $currentName = (string) ($product['name'] ?? '');
             $needsRefresh = str_starts_with($currentName, 'Scanned Product ')
@@ -329,8 +388,13 @@ function handleScan(PDO $pdo): void
                     }
                     $productLookupSource = 'openfoodfacts-refresh';
                     $productNameUsed = $offProduct['name'];
+                    $resolvedProductName = (string) ($offProduct['name'] ?? $resolvedProductName);
                 }
             }
+        }
+
+        if ($resolvedProductName === '') {
+            $resolvedProductName = (string) ($productNameUsed ?? 'Vare');
         }
 
         $quantityDelta = ($movementType === 'out') ? -$quantity : $quantity;
@@ -391,18 +455,24 @@ function handleScan(PDO $pdo): void
         ]);
 
         $stmt = $pdo->prepare(
-            'SELECT id, quantity
+            'SELECT id, quantity, minimum_quantity
              FROM household_inventory
              WHERE household_id = ? AND location_id = ? AND product_id = ?
              LIMIT 1'
         );
         $stmt->execute([$householdId, $locationId, $productId]);
         $inventory = $stmt->fetch();
+        $autoAddedToShoppingList = false;
 
         if ($inventory) {
             $newQuantity = (float) $inventory['quantity'] + $quantityDelta;
             $stmt = $pdo->prepare('UPDATE household_inventory SET quantity = ? WHERE id = ?');
             $stmt->execute([$newQuantity, (int) $inventory['id']]);
+
+            $minimumQuantity = (float) ($inventory['minimum_quantity'] ?? 0);
+            if ($movementType === 'out' && $minimumQuantity > 0 && $newQuantity <= ($minimumQuantity + 0.0001)) {
+                $autoAddedToShoppingList = addProductToShoppingListIfMissing($pdo, $householdId, $productId, $resolvedProductName);
+            }
         } else {
             $stmt = $pdo->prepare(
                 'INSERT INTO household_inventory (household_id, location_id, product_id, quantity)
@@ -424,6 +494,7 @@ function handleScan(PDO $pdo): void
             'product_name' => $productNameUsed,
             'movement_type' => $movementType,
             'quantity_delta' => $quantityDelta,
+            'auto_added_to_shopping_list' => $autoAddedToShoppingList,
         ]);
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {

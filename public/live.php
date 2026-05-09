@@ -3817,8 +3817,12 @@ async function registerInventoryMovement(barcode, locationIdRaw = '') {
         movement_type: inventoryScanMode,
         quantity: 1,
     }, {includeDeviceToken: true});
-    setInventoryScanStatus(`Lager registreret: ${inventoryScanMode === 'out' ? 'ud' : 'ind'} (${String(payload?.barcode || code)})`);
+    const autoAdded = !!payload?.auto_added_to_shopping_list;
+    setInventoryScanStatus(`Lager registreret: ${inventoryScanMode === 'out' ? 'ud' : 'ind'} (${String(payload?.barcode || code)})${autoAdded ? ' · tilføjet til indkøbsliste' : ''}`);
     appendInventoryScanDebug(`API svar: ${String(payload?.status || 'ok')} ${String(payload?.message || '')}`);
+    if (autoAdded) {
+        appendInventoryScanDebug('Minimum nået: varen er automatisk tilføjet til indkøbslisten.');
+    }
 }
 
 function openIngredientCreatePanel() {
