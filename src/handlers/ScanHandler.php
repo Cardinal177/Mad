@@ -1057,3 +1057,89 @@ function handleShoppingListAddItems(PDO $pdo): void
         ]);
     }
 }
+
+function handleShoppingListSetItemChecked(PDO $pdo): void
+{
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    $data = parseJsonInput();
+    $itemId = (int) ($data['item_id'] ?? 0);
+    $isChecked = !empty($data['is_checked']) ? 1 : 0;
+
+    if ($itemId <= 0) {
+        response(400, ['error' => 'Missing or invalid item_id']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            'UPDATE shopping_list_items si
+             INNER JOIN shopping_lists sl ON sl.id = si.shopping_list_id
+             SET si.is_checked = ?
+             WHERE si.id = ?
+               AND sl.household_id = ?
+               AND sl.status IN ("open", "in_progress")'
+        );
+        $stmt->execute([$isChecked, $itemId, $householdId]);
+
+        if ($stmt->rowCount() < 1) {
+            response(404, ['error' => 'Shopping list item not found']);
+            return;
+        }
+
+        response(200, [
+            'status' => 'ok',
+            'item_id' => $itemId,
+            'is_checked' => (bool) $isChecked,
+        ]);
+    } catch (Throwable $e) {
+        response(500, [
+            'error' => 'Database error',
+            'message' => $e->getMessage(),
+        ]);
+    }
+}
+
+function handleShoppingListRemoveItem(PDO $pdo): void
+{
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    $data = parseJsonInput();
+    $itemId = (int) ($data['item_id'] ?? 0);
+
+    if ($itemId <= 0) {
+        response(400, ['error' => 'Missing or invalid item_id']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            'DELETE si FROM shopping_list_items si
+             INNER JOIN shopping_lists sl ON sl.id = si.shopping_list_id
+             WHERE si.id = ?
+               AND sl.household_id = ?
+               AND sl.status IN ("open", "in_progress")'
+        );
+        $stmt->execute([$itemId, $householdId]);
+
+        if ($stmt->rowCount() < 1) {
+            response(404, ['error' => 'Shopping list item not found']);
+            return;
+        }
+
+        response(200, [
+            'status' => 'ok',
+            'item_id' => $itemId,
+            'removed' => true,
+        ]);
+    } catch (Throwable $e) {
+        response(500, [
+            'error' => 'Database error',
+            'message' => $e->getMessage(),
+        ]);
+    }
+}

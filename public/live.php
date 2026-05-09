@@ -1096,33 +1096,10 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             display: none;
         }
         .shopping-compact {
-            display: grid;
-            gap: 12px;
-        }
-        .shopping-store-group {
             border: 1px solid var(--line);
             border-radius: 14px;
             background: rgba(255,252,247,0.92);
             overflow: hidden;
-        }
-        .shopping-store-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            padding: 9px 12px;
-            background: rgba(236,226,212,0.7);
-            border-bottom: 1px solid var(--line);
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            color: var(--muted);
-        }
-        .shopping-store-count {
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--accent);
         }
         .shopping-list {
             list-style: none;
@@ -1131,7 +1108,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
         }
         .shopping-row {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-columns: auto minmax(0, 1fr) auto auto;
             gap: 10px;
             align-items: center;
             padding: 8px 12px;
@@ -1141,7 +1118,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             border-top: 0;
         }
         .shopping-row.checked {
-            opacity: 0.55;
+            opacity: 0.72;
         }
         .shopping-row-main {
             min-width: 0;
@@ -1159,9 +1136,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             margin-top: 3px;
             font-size: 11px;
             color: var(--muted);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: normal;
         }
         .shopping-qty {
             display: inline-flex;
@@ -1175,6 +1150,48 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             font-size: 12px;
             font-weight: 800;
             padding: 0 9px;
+        }
+        .shopping-check,
+        .shopping-delete {
+            min-width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            background: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--muted);
+        }
+        .shopping-check {
+            color: var(--accent);
+        }
+        .shopping-row.checked .shopping-check {
+            background: rgba(47,106,86,0.14);
+            border-color: rgba(47,106,86,0.35);
+        }
+        .shopping-delete {
+            color: #8a2f2f;
+        }
+        .shopping-check:disabled,
+        .shopping-delete:disabled {
+            opacity: 0.5;
+            cursor: wait;
+        }
+        @media (max-width: 640px) {
+            .shopping-row {
+                grid-template-columns: auto minmax(0, 1fr) auto;
+                gap: 8px;
+            }
+            .shopping-qty {
+                justify-self: start;
+                grid-column: 2;
+            }
+            .shopping-delete {
+                grid-column: 3;
+                grid-row: span 2;
+                align-self: stretch;
+            }
         }
         .stack {
             display: grid;
@@ -2371,91 +2388,130 @@ function renderShoppingList(items, shoppingList = null) {
         return;
     }
 
-    const flowOrder = {
-        frugt_groent: 0,
-        ferskvare: 1,
-        mejeri: 2,
-        kød: 3,
-        fisk: 4,
-        brød: 5,
-        frostvare: 6,
-        konserves: 7,
-        tørvare: 8,
-        krydderier: 9,
-        drikke: 10,
-        andet: 11,
-    };
-
-    const storeGroups = new Map();
-    for (const item of items) {
-        const storeName = String(item?.preferred_store || '').trim() || 'Uden butik';
-        if (!storeGroups.has(storeName)) {
-            storeGroups.set(storeName, []);
+    const sortedItems = items.slice().sort((a, b) => {
+        const aChecked = !!a?.is_checked;
+        const bChecked = !!b?.is_checked;
+        if (aChecked !== bChecked) {
+            return aChecked ? 1 : -1;
         }
-        storeGroups.get(storeName).push(item);
-    }
 
-    const sortedStores = Array.from(storeGroups.keys()).sort((a, b) => {
-        const aNoStore = a === 'Uden butik';
-        const bNoStore = b === 'Uden butik';
-        if (aNoStore !== bNoStore) {
-            return aNoStore ? 1 : -1;
+        const aStore = String(a?.preferred_store || '').trim();
+        const bStore = String(b?.preferred_store || '').trim();
+        if (aStore !== bStore) {
+            if (!aStore) {
+                return 1;
+            }
+            if (!bStore) {
+                return -1;
+            }
+            return aStore.localeCompare(bStore, 'da');
         }
-        return a.localeCompare(b, 'da');
+
+        return String(a?.product_name || '').localeCompare(String(b?.product_name || ''), 'da');
     });
 
-    const listTitle = shoppingList?.title ? `<div class="nutrition-note" style="margin-bottom: 8px;">${esc(shoppingList.title)}</div>` : '';
+    const listTitle = shoppingList?.title
+        ? `<div class="nutrition-note" style="margin-bottom: 8px;">${esc(shoppingList.title)}</div>`
+        : '';
 
-    const groupsHtml = sortedStores.map(storeName => {
-        const groupItems = (storeGroups.get(storeName) || []).slice().sort((a, b) => {
-            const aChecked = !!a?.is_checked;
-            const bChecked = !!b?.is_checked;
-            if (aChecked !== bChecked) {
-                return aChecked ? 1 : -1;
-            }
+    const rowsHtml = sortedItems.map(item => {
+        const typeText = productTypeLabel(item?.product_type || 'andet');
+        const storeText = String(item?.preferred_store || '').trim();
+        const metaParts = [typeText];
+        if (storeText) {
+            metaParts.push(storeText);
+        }
+        if (item?.brand) {
+            metaParts.push(String(item.brand));
+        }
+        if (item?.is_checked) {
+            metaParts.push('Koebt');
+        }
 
-            const aType = String(a?.product_type || 'andet');
-            const bType = String(b?.product_type || 'andet');
-            const aRank = Object.prototype.hasOwnProperty.call(flowOrder, aType) ? flowOrder[aType] : 99;
-            const bRank = Object.prototype.hasOwnProperty.call(flowOrder, bType) ? flowOrder[bType] : 99;
-            if (aRank !== bRank) {
-                return aRank - bRank;
-            }
+        const itemId = Number(item?.id || 0);
+        const isChecked = !!item?.is_checked;
 
-            return String(a?.product_name || '').localeCompare(String(b?.product_name || ''), 'da');
-        });
-
-        const rowsHtml = groupItems.map(item => {
-            const typeText = productTypeLabel(item?.product_type || 'andet');
-            const metaParts = [typeText];
-            if (item?.brand) {
-                metaParts.push(String(item.brand));
-            }
-            if (item?.is_checked) {
-                metaParts.push('Afkrydset');
-            }
-
-            return `<li class="shopping-row${item?.is_checked ? ' checked' : ''}">
-                <div class="shopping-row-main">
-                    <p class="shopping-name">${esc(item?.product_name || 'Ukendt vare')}</p>
-                    <p class="shopping-meta">${esc(metaParts.join(' · '))}</p>
-                </div>
-                <span class="shopping-qty">${esc(formatQuantity(item?.quantity ?? 1))}</span>
-            </li>`;
-        }).join('');
-
-        return `<section class="shopping-store-group">
-            <header class="shopping-store-head">
-                <span>${esc(storeName)}</span>
-                <span class="shopping-store-count">${groupItems.length} varer</span>
-            </header>
-            <ul class="shopping-list">
-                ${rowsHtml}
-            </ul>
-        </section>`;
+        return `<li class="shopping-row${isChecked ? ' checked' : ''}">
+            <button class="shopping-check"
+                data-shopping-action="toggle"
+                data-item-id="${itemId}"
+                data-next-checked="${isChecked ? '0' : '1'}"
+                aria-label="${isChecked ? 'Fjern markering' : 'Marker som koebt'}"
+                title="${isChecked ? 'Fortryd koebt' : 'Marker som koebt'}">${isChecked ? 'OK' : '+'}</button>
+            <div class="shopping-row-main">
+                <p class="shopping-name">${esc(item?.product_name || 'Ukendt vare')}</p>
+                <p class="shopping-meta">${esc(metaParts.join(' · '))}</p>
+            </div>
+            <span class="shopping-qty">${esc(formatQuantity(item?.quantity ?? 1))}</span>
+            <button class="shopping-delete"
+                data-shopping-action="remove"
+                data-item-id="${itemId}"
+                aria-label="Slet vare"
+                title="Slet vare">Slet</button>
+        </li>`;
     }).join('');
 
-    body.innerHTML = `${listTitle}<div class="shopping-compact">${groupsHtml}</div>`;
+    body.innerHTML = `${listTitle}<div class="shopping-compact"><ul class="shopping-list">${rowsHtml}</ul></div>`;
+}
+
+async function setShoppingItemChecked(itemId, isChecked) {
+    const targetHouseholdId = Number(householdId || 0) > 0 ? String(householdId) : '1';
+    await postJson(`api.php?endpoint=shopping.list.set_item_checked&household_id=${encodeURIComponent(targetHouseholdId)}`, {
+        item_id: Number(itemId || 0),
+        is_checked: !!isChecked,
+    });
+}
+
+async function removeShoppingItem(itemId) {
+    const targetHouseholdId = Number(householdId || 0) > 0 ? String(householdId) : '1';
+    await postJson(`api.php?endpoint=shopping.list.remove_item&household_id=${encodeURIComponent(targetHouseholdId)}`, {
+        item_id: Number(itemId || 0),
+    });
+}
+
+function initShoppingListActions() {
+    const body = document.getElementById('shoppingBody');
+    if (!body || body.dataset.actionsBound === '1') {
+        return;
+    }
+
+    body.dataset.actionsBound = '1';
+    body.addEventListener('click', async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+            return;
+        }
+
+        const actionButton = target.closest('[data-shopping-action]');
+        if (!(actionButton instanceof HTMLButtonElement)) {
+            return;
+        }
+
+        const itemId = Number(actionButton.dataset.itemId || 0);
+        if (itemId <= 0) {
+            return;
+        }
+
+        const action = actionButton.dataset.shoppingAction || '';
+        actionButton.disabled = true;
+
+        try {
+            if (action === 'toggle') {
+                const nextChecked = actionButton.dataset.nextChecked === '1';
+                await setShoppingItemChecked(itemId, nextChecked);
+                await refresh();
+                return;
+            }
+
+            if (action === 'remove') {
+                await removeShoppingItem(itemId);
+                await refresh();
+            }
+        } catch (e) {
+            alert('Kunne ikke opdatere indkoebssedlen: ' + String(e?.message || e));
+            actionButton.disabled = false;
+        }
+    });
 }
 
 function renderOfferHighlights(items) {
@@ -3512,6 +3568,7 @@ document.getElementById('aiSuggestButton').addEventListener('click', fetchAiIdea
 window.addEventListener('hashchange', updateNavFromHash);
 initAdminConsole();
 initIngredientTools();
+initShoppingListActions();
 applyTraditionalPage(<?= json_encode($currentPage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
 updateNavFromHash();
 initAuthGate();
