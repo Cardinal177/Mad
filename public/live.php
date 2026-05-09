@@ -757,6 +757,24 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             background: rgba(47,106,86,0.12);
             color: var(--accent);
         }
+        #inventoryScanInput {
+            height: 36px;
+        }
+        #inventoryCameraPreview {
+            background: #000;
+            max-height: 260px;
+            object-fit: cover;
+        }
+        @media (max-width: 640px) {
+            #inventoryScanInput {
+                min-width: 100%;
+            }
+            #inventoryCameraStart,
+            #inventoryCameraStop,
+            #inventoryScanSubmit {
+                flex: 1;
+            }
+        }
         .scan-type {
             display: inline-flex;
             align-items: center;
@@ -1658,6 +1676,13 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                 <div class="inventory-scan-box" id="inventoryScanBox">
                     <h3 class="inventory-scan-title">Scan på Lager-siden</h3>
                     <p class="inventory-scan-copy">Du kan blive stående her og scanne. Vi viser med det samme om varen allerede er oprettet, eller om du vil oprette den.</p>
+                    <div class="inventory-scan-actions" style="margin-top: 10px;">
+                        <input class="admin-input" id="inventoryScanInput" type="text" inputmode="numeric" autocomplete="off" placeholder="Scan eller skriv barcode her" style="flex:1; min-width: 180px;" />
+                        <button type="button" class="scan-action" id="inventoryScanSubmit">Registrer</button>
+                        <button type="button" class="scan-action primary" id="inventoryCameraStart">Kamera scan</button>
+                        <button type="button" class="scan-action" id="inventoryCameraStop" style="display:none;">Stop kamera</button>
+                    </div>
+                    <video id="inventoryCameraPreview" playsinline muted style="display:none; width:100%; margin-top:10px; border-radius:12px; border:1px solid var(--line);"></video>
                     <div class="inventory-scan-status" id="inventoryScanStatus">Venter på scanning...</div>
                     <div class="inventory-scan-result" id="inventoryScanResult" style="display:none;"></div>
                 </div>
@@ -1995,6 +2020,10 @@ let gateLastInitials = '';
 let inventoryProductsCache = [];
 let lastScannedBarcode = '';
 let lastScanLookupProduct = null;
+let inventoryCameraStream = null;
+let inventoryCameraActive = false;
+let inventoryCameraFrameToken = null;
+let inventoryCameraLastDetectAt = 0;
 
 if (params.get('device_token')) {
     window.localStorage.setItem('madDeviceToken', params.get('device_token'));
@@ -3356,6 +3385,21 @@ function applyTraditionalPage(page) {
         layout.classList.toggle('single-page', page !== 'overblik');
         layout.style.display = page === 'overblik' ? 'none' : '';
     }
+
+    if (page === 'lager') {
+        setTimeout(() => {
+            const input = document.getElementById('inventoryScanInput');
+            if (input instanceof HTMLInputElement) {
+                input.focus();
+                input.select();
+            }
+        }, 60);
+    } else {
+        const stopBtn = document.getElementById('inventoryCameraStop');
+        if (stopBtn instanceof HTMLButtonElement && stopBtn.style.display !== 'none') {
+            stopBtn.click();
+        }
+    }
 }
 
 function updateNavFromHash() {
@@ -3554,10 +3598,145 @@ async function handleScannedBarcode(barcode) {
 
 function initInventoryScanActions() {
     const result = document.getElementById('inventoryScanResult');
-    if (!result || result.dataset.scanActionsBound === '1') {
+    const scanInput = document.getElementById('inventoryScanInput');
+    const scanSubmit = document.getElementById('inventoryScanSubmit');
+    const cameraStart = document.getElementById('inventoryCameraStart');
+    const cameraStop = document.getElementById('inventoryCameraStop');
+    const cameraPreview = document.getElementById('inventoryCameraPreview');
+
+    if (!result || !scanInput || !scanSubmit || !cameraStart || !cameraStop || !cameraPreview || result.dataset.scanActionsBound === '1') {
         return;
     }
     result.dataset.scanActionsBound = '1';
+
+    const submitScanInput = async () => {
+        const code = String(scanInput.value || '').trim();
+        if (!code) {
+            return;
+        }
+        scanInput.value = '';
+        await handleScannedBarcode(code);
+    };
+
+    const stopCameraScan = () => {
+        inventoryCameraActive = false;
+        if (inventoryCameraFrameToken !== null) {
+            cancelAnimationFrame(inventoryCameraFrameToken);
+            inventoryCameraFrameToken = null;
+        }
+        if (inventoryCameraStream) {
+            inventoryCameraStream.getTracks().forEach(track => track.stop());
+            inventoryCameraStream = null;
+        }
+        if (cameraPreview instanceof HTMLVideoElement) {
+            cameraPreview.pause();
+            cameraPreview.srcObject = null;
+            cameraPreview.style.display = 'none';
+        }
+        cameraStop.style.display = 'none';
+        cameraStart.style.display = '';
+    };
+
+    const cameraTick = async () => {
+        if (!inventoryCameraActive) {
+            return;
+        }
+
+        const video = cameraPreview;
+        const detectorSupported = typeof window.BarcodeDetector === 'function';
+        if (!detectorSupported || !(video instanceof HTMLVideoElement) || video.readyState < 2) {
+            inventoryCameraFrameToken = requestAnimationFrame(() => {
+                void cameraTick();
+            });
+            return;
+        }
+
+        try {
+            const now = Date.now();
+            if ((now - inventoryCameraLastDetectAt) >= 180) {
+                inventoryCameraLastDetectAt = now;
+                const detector = new window.BarcodeDetector({formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'qr_code']});
+                const codes = await detector.detect(video);
+                const first = Array.isArray(codes) && codes.length ? String(codes[0].rawValue || '').trim() : '';
+                if (first) {
+                    stopCameraScan();
+                    await handleScannedBarcode(first);
+                    return;
+                }
+            }
+        } catch (_e) {
+            // ignore frame-level detector errors and keep scanning
+        }
+
+        inventoryCameraFrameToken = requestAnimationFrame(() => {
+            void cameraTick();
+        });
+    };
+
+    const startCameraScan = async () => {
+        if (inventoryCameraActive) {
+            return;
+        }
+
+        if (!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function')) {
+            setInventoryScanStatus('Kamera er ikke tilgængeligt på denne enhed/browser.', true);
+            return;
+        }
+        if (typeof window.BarcodeDetector !== 'function') {
+            setInventoryScanStatus('Kamera-scan understøttes ikke i denne browser. Brug scan-feltet eller ekstern scanner.', true);
+            return;
+        }
+
+        try {
+            inventoryCameraStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: {ideal: 'environment'},
+                    width: {ideal: 1280},
+                    height: {ideal: 720},
+                },
+                audio: false,
+            });
+
+            cameraPreview.srcObject = inventoryCameraStream;
+            await cameraPreview.play();
+            cameraPreview.style.display = '';
+            cameraStart.style.display = 'none';
+            cameraStop.style.display = '';
+            inventoryCameraActive = true;
+            setInventoryScanStatus('Kamera scanner aktiv. Peg på barcode.');
+            inventoryCameraLastDetectAt = 0;
+            void cameraTick();
+        } catch (e) {
+            stopCameraScan();
+            setInventoryScanStatus('Kunne ikke starte kamera: ' + String(e?.message || e), true);
+        }
+    };
+
+    scanSubmit.addEventListener('click', () => {
+        void submitScanInput();
+    });
+
+    scanInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            void submitScanInput();
+        }
+    });
+
+    cameraStart.addEventListener('click', () => {
+        void startCameraScan();
+    });
+
+    cameraStop.addEventListener('click', () => {
+        stopCameraScan();
+        setInventoryScanStatus('Kamera scanning stoppet.');
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopCameraScan();
+        }
+    });
 
     result.addEventListener('click', async (event) => {
         const target = event.target;
@@ -3816,8 +3995,9 @@ function initBarcodeScannerCapture() {
             || active instanceof HTMLTextAreaElement
             || (active instanceof HTMLElement && active.isContentEditable);
 
-        // Do not interfere with normal typing except when directly in barcode field.
-        if (isTypingField && (!(active instanceof HTMLInputElement) || active.id !== 'ingredientBarcode')) {
+        // Do not interfere with normal typing except when directly in scanner-specific fields.
+        const allowedInputIds = ['ingredientBarcode', 'inventoryScanInput'];
+        if (isTypingField && (!(active instanceof HTMLInputElement) || !allowedInputIds.includes(active.id))) {
             return;
         }
 
