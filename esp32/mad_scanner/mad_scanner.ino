@@ -87,7 +87,7 @@ enum ScanMode {
 
 ScanMode currentMode = MODE_IN;
 
-const char* modeToMovementType(ScanMode mode) {
+inline const char* modeToMovementType(int mode) {
     return mode == MODE_OUT ? "out" : "in";
 }
 
