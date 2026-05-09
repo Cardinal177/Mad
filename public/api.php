@@ -17,6 +17,7 @@ require_once $baseDir . '/src/handlers/AiHandler.php';
 require_once $baseDir . '/src/handlers/ConfigHandler.php';
 require_once $baseDir . '/src/handlers/NutritionHandler.php';
 require_once $baseDir . '/src/handlers/IngredientHandler.php';
+require_once $baseDir . '/src/handlers/DeviceHandler.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -157,6 +158,16 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'ingredients.create') {
         handleIngredientCreate($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'device.set_mode') {
+        handleDeviceSetMode();
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'device.get_mode') {
+        handleDeviceGetMode();
         exit;
     }
 

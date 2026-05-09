@@ -3557,6 +3557,15 @@ function setInventoryScanMode(mode, source = '') {
     if (source) {
         appendInventoryScanDebug(`Retning sat til ${inventoryScanMode} (${source})`);
     }
+
+    // Notify backend if mode was changed by user click (for ESP32 feedback)
+    if (source === 'klik') {
+        void postJson('api.php?endpoint=device.set_mode', {
+            mode: inventoryScanMode,
+        }, {includeDeviceToken: true}).catch(err => {
+            appendInventoryScanDebug(`Advarsel: kunne ikke updatere ESP32 mode: ${String(err?.message || err)}`);
+        });
+    }
 }
 
 function parseScannerModeCommand(rawValue) {
