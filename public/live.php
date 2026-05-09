@@ -649,6 +649,61 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             color: var(--muted);
             font-size: 12px;
         }
+        .inventory-card-actions {
+            margin-top: 10px;
+            display: flex;
+            justify-content: flex-end;
+        }
+        .inventory-add-shopping {
+            border: 1px solid var(--line);
+            background: rgba(47, 106, 86, 0.1);
+            color: var(--accent);
+            border-radius: 10px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .inventory-add-shopping:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+        .inventory-suggestion-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            align-items: center;
+            padding: 9px 10px;
+            border-top: 1px solid rgba(20,35,29,0.08);
+            cursor: pointer;
+        }
+        .inventory-suggestion-row:first-child {
+            border-top: 0;
+        }
+        .inventory-suggestion-row:active {
+            background: rgba(47,106,86,0.08);
+        }
+        .inventory-suggestion-name {
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        .inventory-suggestion-meta {
+            margin-top: 2px;
+            font-size: 11px;
+            color: var(--muted);
+            line-height: 1.2;
+        }
+        .inventory-suggestion-add {
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--accent);
+            border-radius: 8px;
+            padding: 5px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+        }
         .scan-type {
             display: inline-flex;
             align-items: center;
@@ -1660,6 +1715,10 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                 
                 <div class="shopping-top-bar">
                     <div class="search-container">
+                        <input type="text" id="inventoryShoppingSearch" placeholder="Tilføj fra lager (skriv produktnavn)..." style="padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-family: inherit; font-size: inherit; width: 100%;" />
+                        <div id="inventoryShoppingSuggestions" style="display:none; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.95); position: absolute; top: 100%; left: 0; right: 0; z-index: 11; margin-top: 4px;"></div>
+                    </div>
+                    <div class="search-container">
                         <input type="text" id="leafletOffersSearch" placeholder="Søg i tilbudsvarer..." style="padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-family: inherit; font-size: inherit; width: 100%;" />
                         <div id="leafletOfferSuggestions" style="display:none; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.95); position: absolute; top: 100%; left: 0; right: 0; z-index: 10; margin-top: 4px;"></div>
                     </div>
@@ -1874,6 +1933,7 @@ let isPlatformAdmin = false;
 let gateSending = false;
 let gateVerifying = false;
 let gateLastInitials = '';
+let inventoryProductsCache = [];
 
 if (params.get('device_token')) {
     window.localStorage.setItem('madDeviceToken', params.get('device_token'));
@@ -2352,6 +2412,13 @@ function renderProducts(products) {
             </div>
             ${priceStrip}
             ${nutritionStrip}
+            <div class="inventory-card-actions">
+                <button class="inventory-add-shopping"
+                    data-product-action="add-to-shopping"
+                    data-product-id="${esc(String(product.id || ''))}"
+                    data-product-name="${esc(product.name || 'Ukendt vare')}"
+                    data-store="${esc(product.offer_store || product.standard_store || '')}">Tilføj til indkøbsliste</button>
+            </div>
         </article>`;
     }).join('');
 }
@@ -3024,6 +3091,177 @@ async function addLeafletOffersToShopping(items) {
     }
 }
 
+async function addInventoryProductToShopping(product) {
+    const name = String(product?.name || product?.product_name || '').trim();
+    if (!name) {
+        throw new Error('Produktnavn mangler');
+    }
+
+    const productId = Number(product?.id || product?.product_id || 0);
+    const preferredStore = String(product?.offer_store || product?.standard_store || '').trim();
+    const targetHouseholdId = Number(householdId || 0) > 0 ? String(householdId) : '1';
+
+    await postJson(`api.php?endpoint=shopping.list.add_items&household_id=${encodeURIComponent(targetHouseholdId)}`, {
+        items: [{
+            title: name,
+            productId: productId > 0 ? productId : undefined,
+            store: preferredStore,
+        }],
+    });
+}
+
+function initInventoryCardActions() {
+    const body = document.getElementById('productsBody');
+    if (!body || body.dataset.shoppingAddBound === '1') {
+        return;
+    }
+
+    body.dataset.shoppingAddBound = '1';
+    body.addEventListener('click', async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+            return;
+        }
+
+        const button = target.closest('[data-product-action="add-to-shopping"]');
+        if (!(button instanceof HTMLButtonElement)) {
+            return;
+        }
+
+        const productId = Number(button.dataset.productId || 0);
+        const productName = String(button.dataset.productName || '').trim();
+        if (!productName) {
+            return;
+        }
+
+        const product = {
+            id: productId,
+            name: productName,
+            offer_store: String(button.dataset.store || '').trim(),
+        };
+
+        button.disabled = true;
+        try {
+            await addInventoryProductToShopping(product);
+            await refresh();
+        } catch (e) {
+            alert('Kunne ikke tilføje til indkøbsliste: ' + String(e?.message || e));
+            button.disabled = false;
+        }
+    });
+}
+
+function initInventoryShoppingSearch() {
+    const input = document.getElementById('inventoryShoppingSearch');
+    const suggestions = document.getElementById('inventoryShoppingSuggestions');
+    if (!input || !suggestions || input.dataset.inventorySearchBound === '1') {
+        return;
+    }
+
+    input.dataset.inventorySearchBound = '1';
+
+    const renderInventorySuggestions = (rawQuery) => {
+        const query = normalizeSearchText(rawQuery);
+        if (!query) {
+            suggestions.style.display = 'none';
+            suggestions.innerHTML = '';
+            return;
+        }
+
+        const ranked = inventoryProductsCache
+            .map((product) => {
+                const name = String(product?.name || '').trim();
+                if (!name) {
+                    return null;
+                }
+                const normName = normalizeSearchText(name);
+                const normBrand = normalizeSearchText(String(product?.brand || ''));
+                let score = 0;
+                if (normName.startsWith(query)) {
+                    score += 30;
+                }
+                if (normName.includes(query)) {
+                    score += 20;
+                }
+                if (normBrand && normBrand.includes(query)) {
+                    score += 10;
+                }
+                if (score <= 0) {
+                    return null;
+                }
+                return {product, score};
+            })
+            .filter(Boolean)
+            .sort((a, b) => b.score - a.score || String(a.product.name || '').localeCompare(String(b.product.name || ''), 'da'))
+            .slice(0, 8);
+
+        if (!ranked.length) {
+            suggestions.style.display = 'none';
+            suggestions.innerHTML = '';
+            return;
+        }
+
+        suggestions.innerHTML = ranked.map(({product}) => {
+            const productId = Number(product?.id || 0);
+            const name = String(product?.name || 'Ukendt vare');
+            const brand = String(product?.brand || '').trim();
+            const store = String(product?.offer_store || product?.standard_store || '').trim();
+            const meta = [brand, store].filter(Boolean).join(' · ');
+
+            return `<div class="inventory-suggestion-row" data-inventory-action="add" data-product-id="${esc(String(productId))}" data-product-name="${esc(name)}" data-store="${esc(store)}">
+                <div>
+                    <div class="inventory-suggestion-name">${esc(name)}</div>
+                    <div class="inventory-suggestion-meta">${esc(meta || 'Fra lager')}</div>
+                </div>
+                <button type="button" class="inventory-suggestion-add" data-inventory-action="add" data-product-id="${esc(String(productId))}" data-product-name="${esc(name)}" data-store="${esc(store)}">Tilføj</button>
+            </div>`;
+        }).join('');
+        suggestions.style.display = '';
+    };
+
+    input.addEventListener('input', () => {
+        renderInventorySuggestions(input.value || '');
+    });
+
+    input.addEventListener('focus', () => {
+        renderInventorySuggestions(input.value || '');
+    });
+
+    input.addEventListener('blur', () => {
+        setTimeout(() => {
+            suggestions.style.display = 'none';
+        }, 180);
+    });
+
+    suggestions.addEventListener('click', async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+            return;
+        }
+
+        const row = target.closest('[data-inventory-action="add"]');
+        if (!(row instanceof HTMLElement)) {
+            return;
+        }
+
+        const productId = Number(row.dataset.productId || 0);
+        const name = String(row.dataset.productName || '').trim();
+        const store = String(row.dataset.store || '').trim();
+        if (!name) {
+            return;
+        }
+
+        try {
+            await addInventoryProductToShopping({id: productId, name, offer_store: store});
+            input.value = '';
+            suggestions.style.display = 'none';
+            await refresh();
+        } catch (e) {
+            alert('Kunne ikke tilføje fra lager: ' + String(e?.message || e));
+        }
+    });
+}
+
 function setActiveNav(targetId) {
     document.querySelectorAll('[data-nav-target]').forEach(link => {
         link.classList.toggle('active', link.dataset.navTarget === targetId);
@@ -3638,6 +3876,7 @@ async function refresh() {
 
         const scans = recent.scans || [];
         const productList = products.products || [];
+        inventoryProductsCache = Array.isArray(productList) ? productList : [];
         const lowStock = productList.filter(product => Number(product.quantity ?? 0) <= Number(product.minimum_quantity ?? 0)).length;
         const latest = scans[0] || null;
         const balanced = Math.max(productList.length - lowStock, 0);
@@ -3655,6 +3894,8 @@ async function refresh() {
 
         renderScans(scans);
         renderProducts(productList);
+        initInventoryCardActions();
+        initInventoryShoppingSearch();
         if (shoppingListItems.length > 0) {
             renderShoppingList(shoppingListItems, shoppingList.list || null, shopping.items || []);
         } else {

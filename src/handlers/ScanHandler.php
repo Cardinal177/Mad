@@ -1353,9 +1353,27 @@ function handleShoppingListAddItems(PDO $pdo): void
         foreach ($items as $item) {
             $productName = trim((string) ($item['title'] ?? ''));
             $preferredStore = trim((string) ($item['store'] ?? ''));
+            $productId = (int) ($item['productId'] ?? 0);
             $offerId = (int) ($item['offerId'] ?? 0);
             $offerPrice = null;
             $offerValidUntil = null;
+
+            if ($productId > 0) {
+                $productStmt = $pdo->prepare(
+                    'SELECT p.id, p.name
+                     FROM products p
+                     INNER JOIN household_inventory hi ON hi.product_id = p.id
+                     WHERE hi.household_id = ? AND p.id = ?
+                     LIMIT 1'
+                );
+                $productStmt->execute([$householdId, $productId]);
+                $productRow = $productStmt->fetch();
+                if ($productRow) {
+                    $productName = trim((string) ($productRow['name'] ?? $productName));
+                } else {
+                    $productId = 0;
+                }
+            }
 
             if ($productName === '') {
                 continue;
@@ -1377,12 +1395,24 @@ function handleShoppingListAddItems(PDO $pdo): void
             }
 
             // Check if item already exists in this shopping list with same name and store
-            $stmt = $pdo->prepare(
-                'SELECT id FROM shopping_list_items
-                 WHERE shopping_list_id = ? AND product_name = ? AND preferred_store = ?
-                 LIMIT 1'
-            );
-            $stmt->execute([$shoppingListId, $productName, $preferredStore]);
+            if ($productId > 0) {
+                $stmt = $pdo->prepare(
+                    'SELECT id FROM shopping_list_items
+                     WHERE shopping_list_id = ?
+                       AND product_id = ?
+                       AND ((preferred_store IS NULL AND ? IS NULL) OR preferred_store = ?)
+                     LIMIT 1'
+                );
+                $storeValue = $preferredStore !== '' ? $preferredStore : null;
+                $stmt->execute([$shoppingListId, $productId, $storeValue, $storeValue]);
+            } else {
+                $stmt = $pdo->prepare(
+                    'SELECT id FROM shopping_list_items
+                     WHERE shopping_list_id = ? AND product_name = ? AND preferred_store = ?
+                     LIMIT 1'
+                );
+                $stmt->execute([$shoppingListId, $productName, $preferredStore]);
+            }
             if ($stmt->fetch()) {
                 continue; // Skip duplicate
             }
@@ -1390,11 +1420,12 @@ function handleShoppingListAddItems(PDO $pdo): void
             // Add item to shopping list
             if ($hasOfferIdColumn) {
                 $stmt = $pdo->prepare(
-                    'INSERT INTO shopping_list_items (shopping_list_id, product_name, quantity, preferred_store, offer_id, offer_price, offer_valid_until)
-                     VALUES (?, ?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO shopping_list_items (shopping_list_id, product_id, product_name, quantity, preferred_store, offer_id, offer_price, offer_valid_until)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $stmt->execute([
                     $shoppingListId,
+                    $productId > 0 ? $productId : null,
                     $productName,
                     1,
                     $preferredStore !== '' ? $preferredStore : null,
@@ -1404,11 +1435,12 @@ function handleShoppingListAddItems(PDO $pdo): void
                 ]);
             } else {
                 $stmt = $pdo->prepare(
-                    'INSERT INTO shopping_list_items (shopping_list_id, product_name, quantity, preferred_store, offer_price, offer_valid_until)
-                     VALUES (?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO shopping_list_items (shopping_list_id, product_id, product_name, quantity, preferred_store, offer_price, offer_valid_until)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)'
                 );
                 $stmt->execute([
                     $shoppingListId,
+                    $productId > 0 ? $productId : null,
                     $productName,
                     1,
                     $preferredStore !== '' ? $preferredStore : null,
