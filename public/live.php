@@ -1774,6 +1774,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                         <div class="admin-grid cols-2">
                             <input class="admin-input" id="ingredientQuantity" type="number" step="0.1" min="0" placeholder="Startbeholdning (antal)">
                             <input class="admin-input" id="ingredientMinimum" type="number" step="0.1" min="0" placeholder="Minimum (alarm under)">
+                            <input class="admin-input" id="ingredientWeightGrams" type="number" step="1" min="0" placeholder="Vægt (gram)">
                         </div>
                     </div>
 
@@ -1791,6 +1792,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                     <div class="admin-actions">
                         <button class="admin-button alt" type="button" id="ingredientLookupBtn">Slå op barcode</button>
                         <button class="admin-button" type="button" id="ingredientCreateBtn">Opret ingrediens</button>
+                        <button class="admin-button alt" type="button" id="ingredientCancelEditBtn" style="display:none;">Annuller redigering</button>
                     </div>
                     <div class="admin-status" id="ingredientCreateStatus" style="margin-top:8px;"></div>
                 </details>
@@ -2068,6 +2070,7 @@ let inventoryScanMode = 'in';
 let inventoryScanDebugLines = [];
 let inventoryLastProcessedScan = {signature: '', at: 0};
 let inventoryLastServerScanTimestamp = 0;
+let ingredientEditingProductId = 0;
 
 if (params.get('device_token')) {
     window.localStorage.setItem('madDeviceToken', params.get('device_token'));
@@ -2520,6 +2523,8 @@ function renderProducts(products) {
         const locationBadge = product.location_name
             ? `<span class="location-badge">${esc(locationTypeIcon(product.location_type))} ${esc(product.location_name)}</span>`
             : '';
+        const weightValue = Number(product.weight_grams ?? 0);
+        const hasWeight = Number.isFinite(weightValue) && weightValue > 0;
         return `<article class="inventory-card">
             <div class="inventory-visual">
                 ${image}
@@ -2543,10 +2548,17 @@ function renderProducts(products) {
                     <span class="meta-label">Minimum</span>
                     <div class="meta-value">${esc(formatQuantity(product.minimum_quantity ?? 0))}</div>
                 </div>
+                <div class="meta-block">
+                    <span class="meta-label">Vægt</span>
+                    <div class="meta-value">${hasWeight ? esc(String(Math.round(weightValue)) + ' g') : '-'}</div>
+                </div>
             </div>
             ${priceStrip}
             ${nutritionStrip}
             <div class="inventory-card-actions">
+                <button class="inventory-add-shopping"
+                    data-product-action="edit-ingredient"
+                    data-product-id="${esc(String(product.id || ''))}">Rediger</button>
                 <button class="inventory-add-shopping"
                     data-product-action="add-to-shopping"
                     data-product-id="${esc(String(product.id || ''))}"
@@ -3257,8 +3269,31 @@ function initInventoryCardActions() {
             return;
         }
 
-        const button = target.closest('[data-product-action="add-to-shopping"]');
+        const button = target.closest('[data-product-action]');
         if (!(button instanceof HTMLButtonElement)) {
+            return;
+        }
+
+        const action = String(button.dataset.productAction || '');
+
+        if (action === 'edit-ingredient') {
+            const productId = Number(button.dataset.productId || 0);
+            if (productId <= 0) {
+                return;
+            }
+
+            const product = (Array.isArray(inventoryProductsCache) ? inventoryProductsCache : []).find((item) => Number(item?.id || 0) === productId);
+            if (!product) {
+                alert('Kunne ikke finde produktdata til redigering. Opdater siden og prøv igen.');
+                return;
+            }
+
+            openIngredientCreatePanel();
+            startIngredientEditFromProduct(product);
+            return;
+        }
+
+        if (action !== 'add-to-shopping') {
             return;
         }
 
@@ -4159,6 +4194,7 @@ function initInventoryScanActions() {
 
 function ingredientFormValues() {
     return {
+        product_id: ingredientEditingProductId > 0 ? ingredientEditingProductId : undefined,
         name: document.getElementById('ingredientName')?.value.trim() || '',
         barcode: document.getElementById('ingredientBarcode')?.value.trim() || '',
         brand: document.getElementById('ingredientBrand')?.value.trim() || '',
@@ -4167,12 +4203,112 @@ function ingredientFormValues() {
         location_id: document.getElementById('ingredientLocationId')?.value || '',
         quantity: document.getElementById('ingredientQuantity')?.value.trim() || '',
         minimum_quantity: document.getElementById('ingredientMinimum')?.value.trim() || '',
+        weight_grams: document.getElementById('ingredientWeightGrams')?.value.trim() || '',
         store_name: document.getElementById('ingredientStore')?.value.trim() || '',
         price: document.getElementById('ingredientPrice')?.value.trim() || '',
         offer_store: document.getElementById('ingredientOfferStore')?.value.trim() || '',
         offer_price: document.getElementById('ingredientOfferPrice')?.value.trim() || '',
         offer_valid_to: document.getElementById('ingredientOfferValidTo')?.value.trim() || '',
     };
+}
+
+function setIngredientFormMode(editing) {
+    const createBtn = document.getElementById('ingredientCreateBtn');
+    const cancelBtn = document.getElementById('ingredientCancelEditBtn');
+    const panelTitle = document.querySelector('#ingredientCreateDetails summary span');
+    const panelChip = document.querySelector('#ingredientCreateDetails summary .chip');
+
+    if (createBtn) {
+        createBtn.textContent = editing ? 'Gem ændringer' : 'Opret ingrediens';
+    }
+    if (cancelBtn) {
+        cancelBtn.style.display = editing ? '' : 'none';
+    }
+    if (panelTitle) {
+        panelTitle.textContent = editing ? 'Rediger ingrediens' : 'Ny ingrediens';
+    }
+    if (panelChip) {
+        panelChip.textContent = editing ? 'Rediger' : '+ Tilføj';
+    }
+}
+
+function resetIngredientEditMode(clearForm = false) {
+    ingredientEditingProductId = 0;
+    setIngredientFormMode(false);
+
+    if (!clearForm) {
+        return;
+    }
+
+    const formIds = [
+        'ingredientBarcode',
+        'ingredientName',
+        'ingredientBrand',
+        'ingredientImageUrl',
+        'ingredientProductType',
+        'ingredientQuantity',
+        'ingredientMinimum',
+        'ingredientWeightGrams',
+        'ingredientStore',
+        'ingredientPrice',
+        'ingredientOfferStore',
+        'ingredientOfferPrice',
+        'ingredientOfferValidTo',
+    ];
+
+    formIds.forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el || !('value' in el)) {
+            return;
+        }
+        if (id === 'ingredientProductType') {
+            el.value = 'andet';
+            return;
+        }
+        el.value = '';
+    });
+}
+
+function startIngredientEditFromProduct(product) {
+    ingredientEditingProductId = Number(product?.id || 0);
+    if (ingredientEditingProductId <= 0) {
+        return;
+    }
+    const locationIdRaw = String(product?.location_id || '');
+
+    const setValue = (id, value) => {
+        const el = document.getElementById(id);
+        if (!el || !('value' in el)) {
+            return;
+        }
+        el.value = value;
+    };
+
+    setValue('ingredientBarcode', String(product?.barcode || ''));
+    setValue('ingredientName', String(product?.name || ''));
+    setValue('ingredientBrand', String(product?.brand || ''));
+    setValue('ingredientImageUrl', String(product?.image_url || ''));
+    setValue('ingredientProductType', String(product?.product_type || 'andet'));
+    setValue('ingredientLocationId', locationIdRaw);
+    setValue('ingredientQuantity', String(product?.quantity ?? ''));
+    setValue('ingredientMinimum', String(product?.minimum_quantity ?? ''));
+    setValue('ingredientWeightGrams', String(product?.weight_grams ?? ''));
+    setValue('ingredientStore', String(product?.standard_store || ''));
+    setValue('ingredientPrice', product?.standard_price === null || product?.standard_price === undefined ? '' : String(product.standard_price));
+    setValue('ingredientOfferStore', String(product?.offer_store || ''));
+    setValue('ingredientOfferPrice', product?.offer_price === null || product?.offer_price === undefined ? '' : String(product.offer_price));
+
+    const validTo = String(product?.offer_valid_to || '');
+    setValue('ingredientOfferValidTo', validTo ? validTo.slice(0, 10) : '');
+
+    if (accessToken) {
+        void loadIngredientLocations().then(() => {
+            setValue('ingredientLocationId', locationIdRaw);
+        });
+    }
+
+    setIngredientFormMode(true);
+    setIngredientStatus('Redigerer: ' + String(product?.name || 'Ukendt vare'));
 }
 
 function fillIngredientFieldsFromLookup(product) {
@@ -4245,10 +4381,11 @@ async function createIngredientFromForm() {
         return;
     }
 
-    setIngredientStatus('Opretter ingrediens...');
+    setIngredientStatus(ingredientEditingProductId > 0 ? 'Gemmer ændringer...' : 'Opretter ingrediens...');
     try {
         const payload = await postJson('api.php?endpoint=ingredients.create', {
             household_id: householdId,
+            product_id: values.product_id,
             name: values.name,
             barcode: values.barcode,
             brand: values.brand,
@@ -4257,6 +4394,7 @@ async function createIngredientFromForm() {
             location_id: values.location_id !== '' ? Number(values.location_id) : undefined,
             quantity: values.quantity,
             minimum_quantity: values.minimum_quantity,
+            weight_grams: values.weight_grams,
             store_name: values.store_name,
             price: values.price,
             offer_store: values.offer_store,
@@ -4264,11 +4402,12 @@ async function createIngredientFromForm() {
             offer_valid_to: values.offer_valid_to,
         });
 
-        setIngredientStatus('Ingrediens oprettet: ' + (payload?.ingredient?.name || values.name || values.barcode));
+        setIngredientStatus((ingredientEditingProductId > 0 ? 'Ingrediens opdateret: ' : 'Ingrediens oprettet: ') + (payload?.ingredient?.name || values.name || values.barcode));
         document.getElementById('ingredientCreateDetails')?.removeAttribute('open');
+        resetIngredientEditMode(true);
         refresh();
     } catch (error) {
-        setIngredientStatus('Kunne ikke oprette ingrediens: ' + (error?.message || 'Ukendt fejl'), true);
+        setIngredientStatus('Kunne ikke gemme ingrediens: ' + (error?.message || 'Ukendt fejl'), true);
     }
 }
 
@@ -4303,6 +4442,7 @@ async function loadIngredientLocations() {
 function initIngredientTools() {
     const lookupBtn = document.getElementById('ingredientLookupBtn');
     const createBtn = document.getElementById('ingredientCreateBtn');
+    const cancelEditBtn = document.getElementById('ingredientCancelEditBtn');
     const barcodeInput = document.getElementById('ingredientBarcode');
     const panel = document.getElementById('ingredientCreateDetails');
 
@@ -4311,6 +4451,12 @@ function initIngredientTools() {
     }
     if (createBtn) {
         createBtn.addEventListener('click', createIngredientFromForm);
+    }
+    if (cancelEditBtn) {
+        cancelEditBtn.addEventListener('click', () => {
+            resetIngredientEditMode(true);
+            setIngredientStatus('Redigering annulleret.');
+        });
     }
     if (barcodeInput) {
         barcodeInput.addEventListener('keydown', (event) => {
@@ -4327,7 +4473,10 @@ function initIngredientTools() {
             if (panel.open && accessToken) {
                 loadIngredientLocations();
             }
-        }, {once: true});
+            if (!panel.open) {
+                resetIngredientEditMode(false);
+            }
+        });
     }
 }
 

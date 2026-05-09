@@ -447,6 +447,9 @@ function handleProductList(PDO $pdo): void
         $productTypeSelect = scanProductsHasColumn($pdo, 'product_type')
             ? 'p.product_type'
             : 'NULL AS product_type';
+        $productWeightSelect = scanProductsHasColumn($pdo, 'weight_grams')
+            ? 'p.weight_grams'
+            : 'NULL AS weight_grams';
         $locationTypeSelect = scanLocationsHasColumn($pdo, 'location_type')
             ? 'hl.location_type'
             : 'NULL AS location_type';
@@ -483,6 +486,7 @@ function handleProductList(PDO $pdo): void
                 p.image_url,
                 p.nutrition_json,
                 ' . $productTypeSelect . ',
+                ' . $productWeightSelect . ',
                 hi.quantity,
                 hi.minimum_quantity,
                 hi.location_id,

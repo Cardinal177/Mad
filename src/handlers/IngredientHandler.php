@@ -146,12 +146,17 @@ function handleIngredientCreate(PDO $pdo): void
     $locationId = resolveHouseholdLocationId($pdo, $householdId, isset($data['location_id']) ? (int) $data['location_id'] : null);
 
     $barcode = trim((string) ($data['barcode'] ?? ''));
+    $requestedProductId = isset($data['product_id']) ? (int) $data['product_id'] : 0;
     $name = trim((string) ($data['name'] ?? ''));
     $brand = trim((string) ($data['brand'] ?? ''));
     $imageUrl = trim((string) ($data['image_url'] ?? ''));
     $productType = trim((string) ($data['product_type'] ?? 'andet'));
     $minimumQuantity = isset($data['minimum_quantity']) ? (float) $data['minimum_quantity'] : 0.0;
     $quantity = isset($data['quantity']) ? (float) $data['quantity'] : 0.0;
+    $weightGrams = null;
+    if (array_key_exists('weight_grams', $data) && $data['weight_grams'] !== '') {
+        $weightGrams = max(0, (int) $data['weight_grams']);
+    }
 
     $storeName = trim((string) ($data['store_name'] ?? ''));
     $price = isset($data['price']) && $data['price'] !== '' ? (float) $data['price'] : null;
@@ -190,22 +195,74 @@ function handleIngredientCreate(PDO $pdo): void
         $pdo->beginTransaction();
 
         $productId = null;
+        if ($requestedProductId > 0) {
+            $stmt = $pdo->prepare(
+                'SELECT p.id, p.barcode
+                 FROM products p
+                 INNER JOIN household_inventory hi ON hi.product_id = p.id
+                 WHERE p.id = ? AND hi.household_id = ?
+                 LIMIT 1'
+            );
+            $stmt->execute([$requestedProductId, $householdId]);
+            $existingProduct = $stmt->fetch();
+            if (!$existingProduct) {
+                response(404, ['error' => 'Produktet findes ikke i denne husstand']);
+                return;
+            }
+
+            $productId = (int) $existingProduct['id'];
+            if ($barcode === '') {
+                $barcode = (string) ($existingProduct['barcode'] ?? '');
+            }
+        }
+
         if ($barcode !== '') {
             $stmt = $pdo->prepare('SELECT id FROM products WHERE barcode = ? LIMIT 1');
             $stmt->execute([$barcode]);
             $existing = $stmt->fetch();
             if ($existing) {
+                if ($productId !== null && $productId !== (int) $existing['id']) {
+                    response(409, ['error' => 'Barcode findes allerede på et andet produkt']);
+                    return;
+                }
                 $productId = (int) $existing['id'];
 
+            }
+        }
+
+        if ($productId !== null) {
+            if (scanProductsHasColumn($pdo, 'weight_grams')) {
                 $stmt = $pdo->prepare(
                     'UPDATE products
-                     SET name = ?,
+                     SET barcode = ?,
+                         name = ?,
+                         brand = ?,
+                         image_url = ?,
+                         product_type = ?,
+                         weight_grams = ?
+                     WHERE id = ?'
+                );
+                $stmt->execute([
+                    $barcode !== '' ? $barcode : null,
+                    $name,
+                    $brand !== '' ? $brand : null,
+                    $imageUrl !== '' ? $imageUrl : null,
+                    $productType,
+                    $weightGrams,
+                    $productId,
+                ]);
+            } else {
+                $stmt = $pdo->prepare(
+                    'UPDATE products
+                     SET barcode = ?,
+                         name = ?,
                          brand = ?,
                          image_url = ?,
                          product_type = ?
                      WHERE id = ?'
                 );
                 $stmt->execute([
+                    $barcode !== '' ? $barcode : null,
                     $name,
                     $brand !== '' ? $brand : null,
                     $imageUrl !== '' ? $imageUrl : null,
@@ -216,17 +273,32 @@ function handleIngredientCreate(PDO $pdo): void
         }
 
         if ($productId === null) {
-            $stmt = $pdo->prepare(
-                'INSERT INTO products (barcode, name, brand, image_url, product_type)
-                 VALUES (?, ?, ?, ?, ?)'
-            );
-            $stmt->execute([
-                $barcode !== '' ? $barcode : null,
-                $name,
-                $brand !== '' ? $brand : null,
-                $imageUrl !== '' ? $imageUrl : null,
-                $productType,
-            ]);
+            if (scanProductsHasColumn($pdo, 'weight_grams')) {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO products (barcode, name, brand, image_url, product_type, weight_grams)
+                     VALUES (?, ?, ?, ?, ?, ?)'
+                );
+                $stmt->execute([
+                    $barcode !== '' ? $barcode : null,
+                    $name,
+                    $brand !== '' ? $brand : null,
+                    $imageUrl !== '' ? $imageUrl : null,
+                    $productType,
+                    $weightGrams,
+                ]);
+            } else {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO products (barcode, name, brand, image_url, product_type)
+                     VALUES (?, ?, ?, ?, ?)'
+                );
+                $stmt->execute([
+                    $barcode !== '' ? $barcode : null,
+                    $name,
+                    $brand !== '' ? $brand : null,
+                    $imageUrl !== '' ? $imageUrl : null,
+                    $productType,
+                ]);
+            }
             $productId = (int) $pdo->lastInsertId();
         }
 
@@ -279,6 +351,7 @@ function handleIngredientCreate(PDO $pdo): void
                 'brand' => $brand,
                 'image_url' => $imageUrl,
                 'product_type' => $productType,
+                'weight_grams' => $weightGrams,
                 'household_id' => $householdId,
                 'location_id' => $locationId,
                 'quantity' => $quantity,
