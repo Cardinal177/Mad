@@ -2525,7 +2525,7 @@ function renderProducts(products) {
             : '';
         const weightValue = Number(product.weight_grams ?? 0);
         const hasWeight = Number.isFinite(weightValue) && weightValue > 0;
-        return `<article class="inventory-card">
+        return `<article class="inventory-card" data-product-id="${esc(String(product.id || ''))}" data-location-id="${esc(String(product.location_id || ''))}">
             <div class="inventory-visual">
                 ${image}
                 <div>
@@ -2542,7 +2542,7 @@ function renderProducts(products) {
             <div class="inventory-meta">
                 <div class="meta-block">
                     <span class="meta-label">Beholdning</span>
-                    <div class="meta-value">${esc(formatQuantity(product.quantity ?? 0))}</div>
+                    <div class="meta-value" data-field="quantity">${esc(formatQuantity(product.quantity ?? 0))}</div>
                 </div>
                 <div class="meta-block">
                     <span class="meta-label">Minimum</span>
@@ -3672,6 +3672,22 @@ async function pollInventoryLastScanFromServer() {
                 return product;
             });
 
+            const productCards = document.querySelectorAll(`#productsBody .inventory-card[data-product-id="${scanProductId}"]`);
+            productCards.forEach((card) => {
+                if (!(card instanceof HTMLElement)) {
+                    return;
+                }
+                const cardLocationId = Number(card.dataset.locationId || 0);
+                if (scanLocationId && cardLocationId && cardLocationId !== scanLocationId) {
+                    return;
+                }
+                const quantityEl = card.querySelector('[data-field="quantity"]');
+                if (quantityEl instanceof HTMLElement) {
+                    quantityEl.textContent = formatQuantity(scanQuantityAfter);
+                    changed = true;
+                }
+            });
+
             if (changed) {
                 renderProducts(inventoryProductsCache);
                 initInventoryCardActions();
@@ -3680,7 +3696,7 @@ async function pollInventoryLastScanFromServer() {
 
         const movementLabel = movement === 'out' ? 'ud' : 'ind';
         setInventoryScanStatus(`Scanner (ESP32): ${code} (${movementLabel})`);
-        appendInventoryScanDebug(`ESP32 scan modtaget: ${code} (${movementLabel}) hh=${scanHouseholdId || '-'} loc=${scanLocationId || '-'} qty=${scanQuantityAfter ?? '-'}`);
+        appendInventoryScanDebug(`ESP32 scan modtaget: ${code} (${movementLabel}) product=${scanProductId || '-'} hh=${scanHouseholdId || '-'} loc=${scanLocationId || '-'} qty=${scanQuantityAfter ?? '-'}`);
 
         if (accessToken) {
             void refresh();
