@@ -585,17 +585,26 @@ async function addItemByText(name) {
     const qtyValue = Number(document.getElementById('addQty')?.value || 1);
     const quantity = Number.isFinite(qtyValue) && qtyValue > 0 ? Math.max(1, Math.round(qtyValue)) : 1;
     const priceRaw = String(document.getElementById('addPrice')?.value || '').trim();
-    const priceNormalized = priceRaw.replace(',', '.');
-    const price = Number(priceNormalized);
     const store = String(selectedAddStore || '').trim();
-    if (!store) {
-        throw new Error('Vælg butik (N, K eller 365)');
+    const priceNormalized = priceRaw !== '' ? priceRaw.replace(',', '.') : '';
+    const price = priceNormalized !== '' ? Number(priceNormalized) : null;
+    if (priceRaw !== '' && (price === null || Number.isNaN(price) || price < 0)) {
+        throw new Error('Pris skal være et gyldigt tal');
     }
-    if (!priceRaw || Number.isNaN(price) || price < 0) {
-        throw new Error('Indtast gyldig pris');
+
+    const addItem = {
+        title: cleaned,
+        quantity,
+    };
+    if (store !== '') {
+        addItem.store = store;
     }
+    if (price !== null) {
+        addItem.price = price;
+    }
+
     await apiPost(`api.php?endpoint=shopping.list.add_items&household_id=${encodeURIComponent(householdId || 1)}`, {
-        items: [{title: cleaned, quantity, price, store}],
+        items: [addItem],
     });
 }
 
@@ -603,8 +612,8 @@ async function addItemFromInventory(productId, name, store) {
     const qtyValue = Number(document.getElementById('addQty')?.value || 1);
     const quantity = Number.isFinite(qtyValue) && qtyValue > 0 ? Math.max(1, Math.round(qtyValue)) : 1;
     const priceRaw = String(document.getElementById('addPrice')?.value || '').trim();
-    const priceNormalized = priceRaw.replace(',', '.');
-    const price = Number(priceNormalized);
+    const priceNormalized = priceRaw !== '' ? priceRaw.replace(',', '.') : '';
+    const price = priceNormalized !== '' ? Number(priceNormalized) : null;
     const normalizeStoreName = (raw) => {
         const text = String(raw || '').trim().toLowerCase();
         if (!text) return '';
@@ -614,20 +623,24 @@ async function addItemFromInventory(productId, name, store) {
         return '';
     };
     const preferredStore = String(selectedAddStore || normalizeStoreName(store) || '').trim();
-    if (!preferredStore) {
-        throw new Error('Vælg butik (N, K eller 365)');
+    if (priceRaw !== '' && (price === null || Number.isNaN(price) || price < 0)) {
+        throw new Error('Pris skal være et gyldigt tal');
     }
-    if (!priceRaw || Number.isNaN(price) || price < 0) {
-        throw new Error('Indtast gyldig pris');
+
+    const addItem = {
+        productId: Number(productId || 0),
+        title: String(name || ''),
+        quantity,
+    };
+    if (preferredStore !== '') {
+        addItem.store = preferredStore;
     }
+    if (price !== null) {
+        addItem.price = price;
+    }
+
     await apiPost(`api.php?endpoint=shopping.list.add_items&household_id=${encodeURIComponent(householdId || 1)}`, {
-        items: [{
-            productId: Number(productId || 0),
-            title: String(name || ''),
-            quantity,
-            price,
-            store: preferredStore,
-        }],
+        items: [addItem],
     });
 }
 
