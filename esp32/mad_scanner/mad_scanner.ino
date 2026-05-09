@@ -145,6 +145,10 @@ void loop() {
         if (buttonState == LOW) {
             currentMode = (currentMode == MODE_IN) ? MODE_OUT : MODE_IN;
             Serial.println(String("Mode switched to: ") + modeToMovementType(currentMode));
+            // Send the new mode to server so web UI stays in sync
+            if (isConnected) {
+                sendModeToServer();
+            }
         }
     }
 
@@ -486,6 +490,71 @@ void pollServerMode() {
             Serial.println("Server updated mode to IN");
             currentMode = MODE_IN;
         }
+    }
+
+    client.stop();
+}
+
+void sendModeToServer() {
+    if (!isConnected) {
+        Serial.println("Mode: not connected, cannot send to server");
+        return;
+    }
+
+    const char* mode = modeToMovementType(currentMode);
+    String payload = String("{\"mode\":\"") + mode + "\"}";
+
+    Serial.println("Sending mode to server: " + payload);
+
+    WiFiClient client;
+    if (!client.connect(apiHostIp, apiPort)) {
+        Serial.println("Mode Send Error: TCP connect failed");
+        return;
+    }
+
+    String setModeEndpoint = String(apiPathGetMode);
+    setModeEndpoint.replace("device.get_mode", "device.set_mode");
+
+    client.print(String("POST ") + setModeEndpoint + " HTTP/1.1\r\n");
+    client.print(String("Host: ") + apiHostHeader + "\r\n");
+    client.print("User-Agent: MadScannerESP32/1.0\r\n");
+    client.print("Connection: close\r\n");
+    client.print("Content-Type: application/json\r\n");
+    client.print(String("X-Device-Token: ") + deviceToken + "\r\n");
+    client.print(String("Content-Length: ") + payload.length() + "\r\n\r\n");
+    client.print(payload);
+
+    uint32_t started = millis();
+    while (!client.available() && millis() - started < 5000) {
+        delay(10);
+    }
+
+    if (!client.available()) {
+        Serial.println("Mode Send Error: timeout");
+        client.stop();
+        return;
+    }
+
+    String statusLine = client.readStringUntil('\n');
+    statusLine.trim();
+
+    int httpCode = -1;
+    if (statusLine.startsWith("HTTP/1.1 ") || statusLine.startsWith("HTTP/1.0 ")) {
+        int firstSpace = statusLine.indexOf(' ');
+        int secondSpace = statusLine.indexOf(' ', firstSpace + 1);
+        if (firstSpace > 0 && secondSpace > firstSpace) {
+            httpCode = statusLine.substring(firstSpace + 1, secondSpace).toInt();
+        }
+    }
+
+    if (httpCode == 200 || httpCode == 201) {
+        Serial.println("Mode Send: Server updated OK");
+    } else {
+        Serial.println("Mode Send Error: HTTP " + String(httpCode));
+    }
+
+    while (client.connected() || client.available()) {
+        String line = client.readStringUntil('\n');
     }
 
     client.stop();
