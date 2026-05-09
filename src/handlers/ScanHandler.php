@@ -135,7 +135,13 @@ function stripBrandFromProductName(string $productName, string $brand): string
     if ($consumed > 0) {
         $remaining = implode(' ', array_slice($nameWords, $consumed));
         if (strlen($remaining) > 2) {
-            return trim($remaining);
+            $remaining = trim($remaining);
+            // Also strip size suffixes like "35g", "500ml" from end
+            $remaining = (string) preg_replace('/\s*\d+\s*(?:g|ml|l|cl|dl|kg|oz)\s*$/iu', '', $remaining);
+            $remaining = trim($remaining);
+            if (strlen($remaining) > 2) {
+                return $remaining;
+            }
         }
     }
 

@@ -2570,7 +2570,9 @@ function renderProducts(products) {
                     consumed = ni + 1; bi += nw.length;
                 } else break;
             }
-            const stripped = nameWords.slice(consumed).join(' ').trim();
+            let stripped = nameWords.slice(consumed).join(' ').trim();
+            // Also strip size suffixes like "35g", "500ml", "1L", "50cl" from end
+            stripped = stripped.replace(/\s*\d+\s*(?:g|ml|l|cl|dl|kg|oz)\s*$/i, '').trim();
             return stripped.length > 2 ? stripped : name;
         };
         const displayName = stripBrand(product.name || 'Ukendt vare', product.brand || '');
@@ -2781,7 +2783,7 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
             }
         }
 
-        // Strip brand from product name using normalized word matching
+        // Strip brand from product name for generic display
         const rawName = String(item?.product_name || 'Ukendt vare');
         const brand = String(item?.brand || '').trim();
         let displayName = rawName;
@@ -2810,7 +2812,9 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
                     break;
                 }
             }
-            const stripped = nameWords.slice(consumed).join(' ').trim();
+            let stripped = nameWords.slice(consumed).join(' ').trim();
+            // Strip size suffixes from end
+            stripped = stripped.replace(/\s*\d+\s*(?:g|ml|l|cl|dl|kg|oz)\s*$/i, '').trim();
             if (stripped.length > 2) displayName = stripped;
         }
         if (!displayName) displayName = rawName;
