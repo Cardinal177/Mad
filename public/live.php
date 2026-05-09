@@ -3630,6 +3630,28 @@ function parseScannerPayload(rawValue) {
     };
 }
 
+function isLikelyScannerToken(rawValue) {
+    const value = String(rawValue || '').trim();
+    if (!value) {
+        return false;
+    }
+
+    const compact = value.replace(/\s+/g, '');
+    if (compact.length >= 8) {
+        return true;
+    }
+
+    if (parseScannerModeCommand(compact)) {
+        return true;
+    }
+
+    if (/^[A-Za-z0-9:_;+\-,]{4,}$/.test(compact)) {
+        return true;
+    }
+
+    return false;
+}
+
 function renderInventoryScanResult(html) {
     const box = document.getElementById('inventoryScanResult');
     if (!box) {
@@ -3708,7 +3730,8 @@ function openIngredientCreatePanel() {
 async function handleScannedBarcode(barcode) {
     const parsed = parseScannerPayload(barcode);
     const code = String(parsed.barcode || '').trim();
-    if (code.length < 8) {
+    if (code.length < 4) {
+        appendInventoryScanDebug(`Ignoreret scan (${code.length} tegn): ${code || '(tom)'}`);
         return;
     }
 
@@ -3834,7 +3857,7 @@ function initInventoryScanActions() {
         }
 
         const parsed = parseScannerPayload(raw);
-        if (String(parsed.barcode || '').trim().length >= 8) {
+        if (String(parsed.barcode || '').trim().length >= 4 || isLikelyScannerToken(raw)) {
             appendInventoryScanDebug(`${sourceLabel}: ${raw}`);
             scanInput.value = '';
             await handleScannedBarcode(raw);
@@ -3955,6 +3978,29 @@ function initInventoryScanActions() {
         scanInputTimer = setTimeout(() => {
             void processScannerFieldValue(scanInput.value, 'input-event');
         }, 90);
+    });
+
+    scanInput.addEventListener('paste', (event) => {
+        const pasted = String(event.clipboardData?.getData('text') || '').trim();
+        if (!pasted) {
+            return;
+        }
+
+        event.preventDefault();
+        void processScannerFieldValue(pasted, 'paste-event');
+    });
+
+    scanInput.addEventListener('beforeinput', (event) => {
+        const inserted = String(event.data || '').trim();
+        if (!inserted || !isLikelyScannerToken(inserted)) {
+            return;
+        }
+
+        // Some HID/BLE devices deliver chunks via beforeinput without reliable keydown events.
+        if (inserted.length >= 4) {
+            event.preventDefault();
+            void processScannerFieldValue(inserted, 'beforeinput-event');
+        }
     });
 
     scanInput.addEventListener('keydown', (event) => {
@@ -4250,7 +4296,7 @@ function initBarcodeScannerCapture() {
 
         const code = raw;
 
-        if (code.length < 8) {
+        if (code.length < 4) {
             appendInventoryScanDebug(`Ignoreret kort buffer: ${code || '(tom)'}`);
             return;
         }
@@ -4294,7 +4340,7 @@ function initBarcodeScannerCapture() {
         lastKeyAt = now;
 
         if (event.key === 'Enter' || event.key === 'Tab') {
-            if (buffer.length >= 8) {
+            if (buffer.length >= 4) {
                 event.preventDefault();
                 appendInventoryScanDebug(`Scanner suffix ${event.key} med buffer ${buffer}`);
                 void commitBufferToBarcodeField();
@@ -4318,6 +4364,24 @@ function initBarcodeScannerCapture() {
         }
 
         resetBuffer();
+    }, true);
+
+    document.addEventListener('paste', (event) => {
+        const page = String(window.location.hash || '').replace('#', '') || String(currentPage || '');
+        if (!(page === 'lager' || page === 'inventorySection')) {
+            return;
+        }
+
+        const pasted = String(event.clipboardData?.getData('text') || '').trim();
+        if (!pasted || !isLikelyScannerToken(pasted)) {
+            return;
+        }
+
+        event.preventDefault();
+        appendInventoryScanDebug(`Global paste-capture: ${pasted}`);
+        void handleScannedBarcode(pasted).catch(() => {
+            setInventoryScanStatus('Scan blev fanget via paste, men kunne ikke behandles.', true);
+        });
     }, true);
 }
 
