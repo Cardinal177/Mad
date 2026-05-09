@@ -1318,6 +1318,12 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             color: var(--muted);
             white-space: normal;
         }
+        .shopping-offer-hint {
+            margin-top: 2px;
+            font-size: 11px;
+            color: var(--accent);
+            font-weight: 600;
+        }
         .shopping-qty {
             display: inline-flex;
             align-items: center;
@@ -2748,16 +2754,29 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
             }
         }
 
-        if (item?.brand) {
-            metaParts.push(String(item.brand));
+        // Strip brand prefix from product name for generic display
+        const rawName = String(item?.product_name || 'Ukendt vare');
+        const brand = String(item?.brand || '').trim();
+        let displayName = rawName;
+        if (brand && rawName.toLowerCase().startsWith(brand.toLowerCase())) {
+            displayName = rawName.slice(brand.length).trim();
         }
+        if (!displayName) displayName = rawName;
+
+        // Show offer hint (brand + store) only when an offer is found
+        const hasOffer = rowPrice !== null && !Number.isNaN(rowPrice);
+        const offerStore = String(item?.offer_store || item?.preferred_store || '').trim();
+        const offerHint = hasOffer && (brand || offerStore)
+            ? `<p class="shopping-offer-hint">${esc([brand, offerStore].filter(Boolean).join(' · '))}</p>`
+            : '';
+
         if (item?.is_checked) {
             metaParts.push('Koebt');
         }
 
         const itemId = Number(item?.id || 0);
         const isChecked = !!item?.is_checked;
-        const priceBadge = (rowPrice !== null && !Number.isNaN(rowPrice))
+        const priceBadge = hasOffer
             ? `<span class="shopping-price" title="Tilbudspris">${esc(formatDkk(rowPrice))}</span>`
             : '<span class="shopping-price missing" title="Pris ikke fundet">pris ?</span>';
 
@@ -2775,7 +2794,8 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
                 role="button"
                 aria-label="${isChecked ? 'Fjern markering' : 'Marker som koebt'}"
                 tabindex="0">
-                <p class="shopping-name">${esc(item?.product_name || 'Ukendt vare')}</p>
+                <p class="shopping-name">${esc(displayName)}</p>
+                ${offerHint}
                 <p class="shopping-meta">${esc(metaParts.join(' · '))}</p>
             </div>
             <div class="shopping-pills">
