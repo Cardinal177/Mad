@@ -757,6 +757,39 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             background: rgba(47,106,86,0.12);
             color: var(--accent);
         }
+        .scan-mode-toggle {
+            display: inline-flex;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            overflow: hidden;
+            background: #fff;
+        }
+        .scan-mode-btn {
+            border: 0;
+            background: transparent;
+            padding: 7px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--muted);
+            cursor: pointer;
+        }
+        .scan-mode-btn.active {
+            background: rgba(47,106,86,0.14);
+            color: var(--accent);
+        }
+        .inventory-scan-debug {
+            margin-top: 8px;
+            padding: 8px;
+            border-radius: 10px;
+            border: 1px solid rgba(20,35,29,0.08);
+            background: rgba(255,255,255,0.75);
+            font-size: 11px;
+            color: var(--muted);
+            line-height: 1.35;
+            max-height: 120px;
+            overflow: auto;
+            white-space: pre-wrap;
+        }
         #inventoryScanInput {
             height: 36px;
         }
@@ -1676,6 +1709,12 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                 <div class="inventory-scan-box" id="inventoryScanBox">
                     <h3 class="inventory-scan-title">Scan på Lager-siden</h3>
                     <p class="inventory-scan-copy">Du kan blive stående her og scanne. Vi viser med det samme om varen allerede er oprettet, eller om du vil oprette den.</p>
+                    <div class="inventory-scan-actions" style="margin-top: 8px;">
+                        <div class="scan-mode-toggle" role="group" aria-label="Lager retning">
+                            <button type="button" class="scan-mode-btn active" id="scanModeIn" data-scan-mode="in">Går ind</button>
+                            <button type="button" class="scan-mode-btn" id="scanModeOut" data-scan-mode="out">Går ud</button>
+                        </div>
+                    </div>
                     <div class="inventory-scan-actions" style="margin-top: 10px;">
                         <input class="admin-input" id="inventoryScanInput" type="text" inputmode="numeric" autocomplete="off" placeholder="Scan eller skriv barcode her" style="flex:1; min-width: 180px;" />
                         <button type="button" class="scan-action" id="inventoryScanSubmit">Registrer</button>
@@ -1684,6 +1723,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                     </div>
                     <video id="inventoryCameraPreview" playsinline muted style="display:none; width:100%; margin-top:10px; border-radius:12px; border:1px solid var(--line);"></video>
                     <div class="inventory-scan-status" id="inventoryScanStatus">Venter på scanning...</div>
+                    <div class="inventory-scan-debug" id="inventoryScanDebug">Diagnose: venter på tastetryk fra scanner...</div>
                     <div class="inventory-scan-result" id="inventoryScanResult" style="display:none;"></div>
                 </div>
                 <details class="planner-card ingredient-create-panel" style="margin-bottom:12px;" id="ingredientCreateDetails">
@@ -2024,6 +2064,8 @@ let inventoryCameraStream = null;
 let inventoryCameraActive = false;
 let inventoryCameraFrameToken = null;
 let inventoryCameraLastDetectAt = 0;
+let inventoryScanMode = 'in';
+let inventoryScanDebugLines = [];
 
 if (params.get('device_token')) {
     window.localStorage.setItem('madDeviceToken', params.get('device_token'));
@@ -3486,6 +3528,20 @@ function setInventoryScanStatus(message, isError = false) {
     el.classList.toggle('err', !!isError);
 }
 
+function appendInventoryScanDebug(message) {
+    const el = document.getElementById('inventoryScanDebug');
+    if (!el) {
+        return;
+    }
+    const stamp = new Date().toLocaleTimeString('da-DK', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+    inventoryScanDebugLines.push(`[${stamp}] ${message}`);
+    if (inventoryScanDebugLines.length > 8) {
+        inventoryScanDebugLines = inventoryScanDebugLines.slice(-8);
+    }
+    el.textContent = inventoryScanDebugLines.join('\n');
+    el.scrollTop = el.scrollHeight;
+}
+
 function findInventoryProductByBarcode(barcode) {
     const target = String(barcode || '').trim();
     if (!target) {
@@ -3552,11 +3608,12 @@ async function handleScannedBarcode(barcode) {
                 <div class="inventory-scan-copy">Barcode ${esc(code)} findes i lageret.</div>
             </div>
             <div class="inventory-scan-actions">
+                <button type="button" class="scan-action primary" data-scan-action="register-movement" data-barcode="${esc(code)}" data-location-id="${esc(String(existing.location_id || ''))}">Registrer ${inventoryScanMode === 'out' ? 'ud af lager' : 'ind i lager'}</button>
                 <button type="button" class="scan-action primary" data-scan-action="add-shopping" data-product-id="${esc(String(existing.id || ''))}" data-product-name="${esc(existing.name || '')}" data-store="${esc(existing.offer_store || existing.standard_store || '')}">Tilføj til indkøbsliste</button>
                 <button type="button" class="scan-action" data-scan-action="open-create" data-barcode="${esc(code)}">Se/Opret detaljer</button>
             </div>
         `);
-        setInventoryScanStatus('Fundet i lager. Du kan tilføje til indkøbsliste med det samme.');
+        setInventoryScanStatus(`Fundet i lager. Klar til registrering (${inventoryScanMode === 'out' ? 'ud' : 'ind'}).`);
         return;
     }
 
@@ -3603,8 +3660,10 @@ function initInventoryScanActions() {
     const cameraStart = document.getElementById('inventoryCameraStart');
     const cameraStop = document.getElementById('inventoryCameraStop');
     const cameraPreview = document.getElementById('inventoryCameraPreview');
+    const modeInBtn = document.getElementById('scanModeIn');
+    const modeOutBtn = document.getElementById('scanModeOut');
 
-    if (!result || !scanInput || !scanSubmit || !cameraStart || !cameraStop || !cameraPreview || result.dataset.scanActionsBound === '1') {
+    if (!result || !scanInput || !scanSubmit || !cameraStart || !cameraStop || !cameraPreview || !modeInBtn || !modeOutBtn || result.dataset.scanActionsBound === '1') {
         return;
     }
     result.dataset.scanActionsBound = '1';
@@ -3615,8 +3674,39 @@ function initInventoryScanActions() {
             return;
         }
         scanInput.value = '';
+        appendInventoryScanDebug(`Manuel registrer: ${code}`);
         await handleScannedBarcode(code);
     };
+
+    const setMode = (mode) => {
+        inventoryScanMode = mode === 'out' ? 'out' : 'in';
+        modeInBtn.classList.toggle('active', inventoryScanMode === 'in');
+        modeOutBtn.classList.toggle('active', inventoryScanMode === 'out');
+        setInventoryScanStatus(`Venter på scanning... Retning: ${inventoryScanMode === 'out' ? 'ud af lager' : 'ind i lager'}`);
+        appendInventoryScanDebug(`Retning sat til: ${inventoryScanMode}`);
+    };
+
+    const registerInventoryMovement = async (barcode, locationIdRaw = '') => {
+        const code = String(barcode || '').trim();
+        if (!code) {
+            return;
+        }
+        const locationId = Number(locationIdRaw || 0) || Number(document.getElementById('ingredientLocationId')?.value || 0) || 1;
+        appendInventoryScanDebug(`Sender scan API: ${code}, mode=${inventoryScanMode}, loc=${locationId}`);
+        const payload = await postJson('api.php?endpoint=scan', {
+            barcode: code,
+            household_id: Number(householdId || 1),
+            location_id: locationId,
+            movement_type: inventoryScanMode,
+            quantity: 1,
+        }, {includeDeviceToken: true});
+        setInventoryScanStatus(`Lager registreret: ${inventoryScanMode === 'out' ? 'ud' : 'ind'} (${esc(String(payload?.barcode || code))})`);
+        appendInventoryScanDebug(`API svar: ${String(payload?.status || 'ok')} ${String(payload?.message || '')}`);
+    };
+
+    modeInBtn.addEventListener('click', () => setMode('in'));
+    modeOutBtn.addEventListener('click', () => setMode('out'));
+    setMode('in');
 
     const stopCameraScan = () => {
         inventoryCameraActive = false;
@@ -3758,6 +3848,22 @@ function initInventoryScanActions() {
             return;
         }
 
+        if (action === 'register-movement') {
+            const barcode = String(actionEl.dataset.barcode || lastScannedBarcode || '').trim();
+            const locationId = String(actionEl.dataset.locationId || '').trim();
+            if (!barcode) {
+                return;
+            }
+            try {
+                await registerInventoryMovement(barcode, locationId);
+                await refresh();
+            } catch (e) {
+                setInventoryScanStatus('Kunne ikke registrere lagerbevægelse: ' + String(e?.message || e), true);
+                appendInventoryScanDebug('API fejl: ' + String(e?.message || e));
+            }
+            return;
+        }
+
         if (action === 'add-shopping') {
             const productId = Number(actionEl.dataset.productId || 0);
             const productName = String(actionEl.dataset.productName || '').trim();
@@ -3769,9 +3875,11 @@ function initInventoryScanActions() {
             try {
                 await addInventoryProductToShopping({id: productId, name: productName, offer_store: store});
                 setInventoryScanStatus('Varen er tilføjet til indkøbslisten.');
+                appendInventoryScanDebug(`Tilføjet til indkøbsliste: ${productName}`);
                 await refresh();
             } catch (e) {
                 setInventoryScanStatus('Kunne ikke tilføje til indkøbslisten: ' + String(e?.message || e), true);
+                appendInventoryScanDebug('Tilføj fejl: ' + String(e?.message || e));
             }
         }
     });
@@ -4010,8 +4118,10 @@ function initBarcodeScannerCapture() {
         if (event.key === 'Enter' || event.key === 'Tab') {
             if (buffer.length >= 8) {
                 event.preventDefault();
+                appendInventoryScanDebug(`Scanner suffix ${event.key} med buffer ${buffer}`);
                 void commitBufferToBarcodeField();
             } else {
+                appendInventoryScanDebug(`Suffix ${event.key} uden gyldig buffer`);
                 resetBuffer();
             }
             return;
@@ -4023,6 +4133,7 @@ function initBarcodeScannerCapture() {
                 clearTimeout(flushTimer);
             }
             flushTimer = setTimeout(() => {
+                appendInventoryScanDebug(`Timeout commit med buffer ${buffer}`);
                 void commitBufferToBarcodeField();
             }, 140);
             return;
