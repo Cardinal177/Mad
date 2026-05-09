@@ -2189,6 +2189,7 @@ function lockApp() {
     }
     if (app) {
         app.setAttribute('aria-hidden', 'true');
+        app.setAttribute('inert', '');
     }
 }
 
@@ -2201,6 +2202,7 @@ function unlockApp() {
     }
     if (app) {
         app.setAttribute('aria-hidden', 'false');
+        app.removeAttribute('inert');
     }
 }
 
