@@ -3604,6 +3604,11 @@ async function pollInventoryLastScanFromServer() {
             return;
         }
 
+        const scanInput = document.getElementById('inventoryScanInput');
+        if (scanInput && 'value' in scanInput) {
+            scanInput.value = code;
+        }
+
         if (movement !== inventoryScanMode) {
             setInventoryScanMode(movement, 'server scan');
         }
