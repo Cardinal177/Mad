@@ -52,6 +52,24 @@ declare(strict_types=1);
             grid-template-columns: 0.9fr 1fr 1.2fr;
             gap: 8px;
         }
+        .store-picker {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 6px;
+        }
+        .store-btn {
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            background: #fff;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+            padding: 10px 0;
+        }
+        .store-btn.selected {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(47,106,86,0.1);
+        }
         input, button {
             border-radius: 12px;
             border: 1px solid var(--line);
@@ -227,7 +245,11 @@ declare(strict_types=1);
         <div class="add-meta-row">
             <input id="addQty" type="number" min="1" step="1" value="1" placeholder="Antal">
             <input id="addPrice" type="text" inputmode="decimal" placeholder="Pris (kr)">
-            <input id="addStore" type="text" placeholder="Butik">
+            <div id="storePicker" class="store-picker" aria-label="Vælg butik">
+                <button class="store-btn" type="button" data-store="Netto">N</button>
+                <button class="store-btn" type="button" data-store="Kvickly">K</button>
+                <button class="store-btn" type="button" data-store="365discount">365</button>
+            </div>
         </div>
         <div id="suggestions" class="suggestions"></div>
         <div id="addStatus" class="status"></div>
@@ -260,6 +282,7 @@ let gateLastRequestedAt = 0;
 let gateRequestInFlight = false;
 let gateAutoVerifyInFlight = false;
 let gateLastAutoVerifyCode = '';
+let selectedAddStore = '';
 let inventoryProducts = [];
 let shoppingItems = [];
 
@@ -546,9 +569,9 @@ async function addItemByText(name) {
     const priceRaw = String(document.getElementById('addPrice')?.value || '').trim();
     const priceNormalized = priceRaw.replace(',', '.');
     const price = Number(priceNormalized);
-    const store = String(document.getElementById('addStore')?.value || '').trim();
+    const store = String(selectedAddStore || '').trim();
     if (!store) {
-        throw new Error('Indtast butik');
+        throw new Error('Vælg butik (N, K eller 365)');
     }
     if (!priceRaw || Number.isNaN(price) || price < 0) {
         throw new Error('Indtast gyldig pris');
@@ -564,10 +587,17 @@ async function addItemFromInventory(productId, name, store) {
     const priceRaw = String(document.getElementById('addPrice')?.value || '').trim();
     const priceNormalized = priceRaw.replace(',', '.');
     const price = Number(priceNormalized);
-    const typedStore = String(document.getElementById('addStore')?.value || '').trim();
-    const preferredStore = typedStore || String(store || '').trim();
+    const normalizeStoreName = (raw) => {
+        const text = String(raw || '').trim().toLowerCase();
+        if (!text) return '';
+        if (text.includes('netto')) return 'Netto';
+        if (text.includes('kvickly')) return 'Kvickly';
+        if (text.includes('365')) return '365discount';
+        return '';
+    };
+    const preferredStore = String(selectedAddStore || normalizeStoreName(store) || '').trim();
     if (!preferredStore) {
-        throw new Error('Indtast butik');
+        throw new Error('Vælg butik (N, K eller 365)');
     }
     if (!priceRaw || Number.isNaN(price) || price < 0) {
         throw new Error('Indtast gyldig pris');
@@ -702,6 +732,29 @@ document.getElementById('gateVerify')?.addEventListener('click', async () => {
 
 const gateInitialsInput = document.getElementById('gateInitials');
 const gateCodeInput = document.getElementById('gateCode');
+const storePicker = document.getElementById('storePicker');
+
+function setSelectedStore(value) {
+    selectedAddStore = String(value || '').trim();
+    storePicker?.querySelectorAll('.store-btn').forEach((btn) => {
+        if (!(btn instanceof HTMLElement)) return;
+        btn.classList.toggle('selected', btn.dataset.store === selectedAddStore);
+    });
+}
+
+storePicker?.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const button = target.closest('.store-btn');
+    if (!(button instanceof HTMLElement)) return;
+    const value = String(button.dataset.store || '').trim();
+    if (!value) return;
+    if (selectedAddStore === value) {
+        setSelectedStore('');
+        return;
+    }
+    setSelectedStore(value);
+});
 
 gateInitialsInput?.addEventListener('input', () => {
     gateInitialsInput.value = gateInitialsInput.value.toUpperCase();
