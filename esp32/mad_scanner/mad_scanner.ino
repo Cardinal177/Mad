@@ -40,7 +40,7 @@ String lastSubmittedMode = "";
 uint32_t lastSubmittedAt = 0;
 const uint32_t duplicateWindowMs = 6000;
 uint32_t lastModePollAt = 0;
-const uint32_t modePollIntervalMs = 2000;  // Poll every 2 seconds
+const uint32_t modePollIntervalMs = 500;  // Poll every 500ms for responsive feedback
 
 String normalizeBarcode(String barcode) {
     barcode.trim();

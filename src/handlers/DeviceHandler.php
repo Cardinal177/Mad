@@ -14,8 +14,7 @@ function handleDeviceSetMode(): void
         return;
     }
 
-    // Store in a simple key-value file or environment variable for now
-    // File-based storage is simpler and doesn't require DB writes for every toggle
+    // Store in a simple key-value file for fast access
     $modeFile = sys_get_temp_dir() . '/mad_device_mode.txt';
     $content = json_encode([
         'mode' => $mode,
@@ -24,9 +23,12 @@ function handleDeviceSetMode(): void
     ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 
     if (!file_put_contents($modeFile, $content)) {
+        error_log('[DeviceHandler] Failed to write mode file: ' . $modeFile);
         response(500, ['error' => 'Failed to store mode']);
         return;
     }
+    
+    error_log('[DeviceHandler] Mode set to: ' . $mode . ' (file: ' . $modeFile . ')');
 
     response(200, [
         'status' => 'ok',
@@ -47,10 +49,11 @@ function handleDeviceGetMode(): void
     $modeFile = sys_get_temp_dir() . '/mad_device_mode.txt';
 
     if (!file_exists($modeFile)) {
+        error_log('[DeviceHandler] Mode file not found: ' . $modeFile . ', defaulting to "in"');
         response(200, [
             'status' => 'ok',
             'mode' => 'in',
-            'message' => 'No mode set yet, defaulting to "in"',
+            'message' => 'No mode file, defaulting to in',
         ]);
         return;
     }
@@ -59,17 +62,21 @@ function handleDeviceGetMode(): void
     $data = json_decode($content, true);
 
     if (!is_array($data) || !isset($data['mode'])) {
+        error_log('[DeviceHandler] Corrupted mode file: ' . $modeFile);
         response(200, [
             'status' => 'ok',
             'mode' => 'in',
-            'message' => 'Mode file corrupted, defaulting to "in"',
+            'message' => 'Mode file corrupted, defaulting to in',
         ]);
         return;
     }
+    
+    $mode = (string) $data['mode'];
+    error_log('[DeviceHandler] Mode GET: ' . $mode . ' (set_at: ' . ($data['set_at'] ?? 'unknown') . ')');
 
     response(200, [
         'status' => 'ok',
-        'mode' => (string) $data['mode'],
+        'mode' => $mode,
         'set_at' => (string) ($data['set_at'] ?? 'unknown'),
     ]);
 }
