@@ -141,9 +141,9 @@ declare(strict_types=1);
         <h2>Log ind</h2>
         <p>Skriv initialer, modtag SMS-kode, og indtast den for adgang.</p>
         <div class="auth-grid">
-            <input id="gateInitials" type="text" maxlength="6" placeholder="Initialer">
+            <input id="gateInitials" type="text" maxlength="6" placeholder="Initialer" autocapitalize="characters" autocomplete="username">
             <button id="gateSend" class="btn-primary" type="button">Send kode</button>
-            <input id="gateCode" type="text" maxlength="6" inputmode="numeric" placeholder="SMS kode (6 cifre)">
+            <input id="gateCode" type="text" maxlength="6" inputmode="numeric" placeholder="SMS kode (6 cifre)" autocomplete="one-time-code">
             <button id="gateVerify" class="btn-primary" type="button">Log ind</button>
             <div id="gateStatus" class="status">2FA påkrævet.</div>
         </div>
@@ -316,25 +316,55 @@ function resolveProductDisplayName(product) {
 }
 
 async function requestCode() {
-    const initials = String(document.getElementById('gateInitials')?.value || '').trim().toUpperCase();
+    const initialsEl = document.getElementById('gateInitials');
+    const codeEl = document.getElementById('gateCode');
+    const sendBtn = document.getElementById('gateSend');
+    const initials = String(initialsEl?.value || '').trim().toUpperCase();
+    if (initialsEl) {
+        initialsEl.value = initials;
+    }
     if (!initials) {
         setStatus('gateStatus', 'Skriv initialer.', true);
         return;
     }
     setStatus('gateStatus', 'Sender SMS-kode...');
-    const payload = await apiPost('api.php?endpoint=auth.request_code', {initials});
-    challengeId = String(payload?.challenge_id || '');
-    setStatus('gateStatus', 'SMS-kode sendt. Indtast koden.');
+    try {
+        if (sendBtn instanceof HTMLButtonElement) {
+            sendBtn.disabled = true;
+        }
+        const payload = await apiPost('api.php?endpoint=auth.request_code', {initials});
+        challengeId = String(payload?.challenge_id || '');
+        setStatus('gateStatus', 'SMS-kode sendt. Indtast koden.');
+        if (codeEl instanceof HTMLInputElement) {
+            codeEl.focus();
+            codeEl.select();
+        }
+    } finally {
+        if (sendBtn instanceof HTMLButtonElement) {
+            sendBtn.disabled = false;
+        }
+    }
 }
 
 async function verifyCode() {
+    const verifyBtn = document.getElementById('gateVerify');
     const code = String(document.getElementById('gateCode')?.value || '').trim();
     if (!challengeId || !code) {
         setStatus('gateStatus', 'Mangler challenge eller kode.', true);
         return;
     }
     setStatus('gateStatus', 'Logger ind...');
-    const payload = await apiPost('api.php?endpoint=auth.verify_code', {challenge_id: challengeId, code});
+    let payload;
+    try {
+        if (verifyBtn instanceof HTMLButtonElement) {
+            verifyBtn.disabled = true;
+        }
+        payload = await apiPost('api.php?endpoint=auth.verify_code', {challenge_id: challengeId, code});
+    } finally {
+        if (verifyBtn instanceof HTMLButtonElement) {
+            verifyBtn.disabled = false;
+        }
+    }
     accessToken = String(payload?.access_token || '');
     if (!accessToken) {
         throw new Error('Mangler adgangstoken');
@@ -521,6 +551,33 @@ document.getElementById('gateSend')?.addEventListener('click', async () => {
 });
 
 document.getElementById('gateVerify')?.addEventListener('click', async () => {
+    try {
+        await verifyCode();
+    } catch (e) {
+        setStatus('gateStatus', 'Fejl ved login: ' + String(e?.message || e), true);
+    }
+});
+
+const gateInitialsInput = document.getElementById('gateInitials');
+const gateCodeInput = document.getElementById('gateCode');
+
+gateInitialsInput?.addEventListener('input', () => {
+    gateInitialsInput.value = gateInitialsInput.value.toUpperCase();
+});
+
+gateInitialsInput?.addEventListener('keydown', async (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    try {
+        await requestCode();
+    } catch (e) {
+        setStatus('gateStatus', 'Fejl ved SMS: ' + String(e?.message || e), true);
+    }
+});
+
+gateCodeInput?.addEventListener('keydown', async (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
     try {
         await verifyCode();
     } catch (e) {
