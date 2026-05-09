@@ -24,6 +24,7 @@ const char* apiHostIp = "194.181.228.25";
 const int apiPort = 80;
 const char* apiHostHeader = "mad.cardinal.webd.pro";
 const char* apiPath = "/api.php?endpoint=scan";
+const char* apiPathGetMode = "/api.php?endpoint=device.get_mode";
 const char* deviceToken = "mad-esp32-2026";
 
 // State management
@@ -38,6 +39,8 @@ String lastSubmittedBarcode = "";
 String lastSubmittedMode = "";
 uint32_t lastSubmittedAt = 0;
 const uint32_t duplicateWindowMs = 6000;
+uint32_t lastModePollAt = 0;
+const uint32_t modePollIntervalMs = 2000;  // Poll every 2 seconds
 
 String normalizeBarcode(String barcode) {
     barcode.trim();
@@ -168,6 +171,12 @@ void loop() {
     if (millis() - lastDisplayRefresh > 500) {
         lastDisplayRefresh = millis();
         displayStatus();
+    }
+    
+    // Poll server for mode every 2 seconds
+    if (isConnected && millis() - lastModePollAt > modePollIntervalMs) {
+        lastModePollAt = millis();
+        pollServerMode();
     }
     
     delay(10);
@@ -371,6 +380,112 @@ void sendToAPI(String barcode) {
     body.trim();
     if (body.length() > 0) {
         Serial.println("API Body: " + body);
+    }
+
+    client.stop();
+}
+
+void pollServerMode() {
+    if (!isConnected) return;
+
+    WiFiClient client;
+    if (!client.connect(apiHostIp, apiPort)) {
+        Serial.println("Poll Error: TCP connect failed");
+        return;
+    }
+
+    client.print(String("GET ") + apiPathGetMode + " HTTP/1.1\r\n");
+    client.print(String("Host: ") + apiHostHeader + "\r\n");
+    client.print("User-Agent: MadScannerESP32/1.0\r\n");
+    client.print("Connection: close\r\n");
+    client.print(String("X-Device-Token: ") + deviceToken + "\r\n\r\n");
+
+    uint32_t started = millis();
+    while (!client.available() && millis() - started < 5000) {
+        delay(10);
+    }
+
+    if (!client.available()) {
+        Serial.println("Poll Error: timeout waiting for response");
+        client.stop();
+        return;
+    }
+
+    String statusLine = client.readStringUntil('\n');
+    statusLine.trim();
+    
+    int httpCode = -1;
+    if (statusLine.startsWith("HTTP/1.1 ") || statusLine.startsWith("HTTP/1.0 ")) {
+        int firstSpace = statusLine.indexOf(' ');
+        int secondSpace = statusLine.indexOf(' ', firstSpace + 1);
+        if (firstSpace > 0 && secondSpace > firstSpace) {
+            httpCode = statusLine.substring(firstSpace + 1, secondSpace).toInt();
+        }
+    }
+
+    if (httpCode != 200) {
+        Serial.println("Poll Error: HTTP " + String(httpCode));
+        client.stop();
+        return;
+    }
+
+    String body = "";
+    bool inBody = false;
+    while (client.connected() || client.available()) {
+        String line = client.readStringUntil('\n');
+        if (!inBody) {
+            if (line == "\r" || line.length() == 0) {
+                inBody = true;
+            }
+            continue;
+        }
+        body += line;
+    }
+
+    body.trim();
+    if (body.length() == 0) {
+        client.stop();
+        return;
+    }
+
+    // Parse JSON response to extract "mode"
+    // Expected: {"status":"ok","mode":"in"...} or {"status":"ok","mode":"out"...}
+    int modeIndex = body.indexOf("\"mode\"");
+    if (modeIndex < 0) {
+        Serial.println("Poll: no mode field");
+        client.stop();
+        return;
+    }
+
+    int colonIndex = body.indexOf(":", modeIndex);
+    if (colonIndex < 0) {
+        client.stop();
+        return;
+    }
+
+    int quoteStart = body.indexOf("\"", colonIndex);
+    int quoteEnd = body.indexOf("\"", quoteStart + 1);
+    if (quoteStart < 0 || quoteEnd < 0) {
+        client.stop();
+        return;
+    }
+
+    String modeValue = body.substring(quoteStart + 1, quoteEnd);
+    modeValue.trim();
+
+    Serial.println("Poll Response: mode=" + modeValue);
+
+    // Update local mode based on server response
+    if (modeValue == "out") {
+        if (currentMode != MODE_OUT) {
+            Serial.println("Server updated mode to OUT");
+            currentMode = MODE_OUT;
+        }
+    } else if (modeValue == "in") {
+        if (currentMode != MODE_IN) {
+            Serial.println("Server updated mode to IN");
+            currentMode = MODE_IN;
+        }
     }
 
     client.stop();
