@@ -249,6 +249,34 @@ function addProductToShoppingListIfMissing(PDO $pdo, int $householdId, int $prod
     return true;
 }
 
+function getDeviceScanContext(): array
+{
+    $modeFile = sys_get_temp_dir() . '/mad_device_mode.txt';
+    if (!file_exists($modeFile)) {
+        return [
+            'household_id' => null,
+            'location_id' => null,
+        ];
+    }
+
+    $content = file_get_contents($modeFile);
+    $data = json_decode((string) $content, true);
+    if (!is_array($data)) {
+        return [
+            'household_id' => null,
+            'location_id' => null,
+        ];
+    }
+
+    $householdId = isset($data['household_id']) ? (int) $data['household_id'] : null;
+    $locationId = isset($data['location_id']) ? (int) $data['location_id'] : null;
+
+    return [
+        'household_id' => ($householdId !== null && $householdId > 0) ? $householdId : null,
+        'location_id' => ($locationId !== null && $locationId > 0) ? $locationId : null,
+    ];
+}
+
 function handleScan(PDO $pdo): void
 {
     $expectedDeviceToken = (string) (env_value('DEVICE_TOKEN', '') ?? '');
@@ -271,8 +299,11 @@ function handleScan(PDO $pdo): void
         response(400, ['error' => 'Missing barcode']);
         return;
     }
-    $householdId = (int) ($data['household_id'] ?? 1);
-    $locationId = (int) ($data['location_id'] ?? 1);
+    $requestedHouseholdId = (int) ($data['household_id'] ?? 1);
+    $requestedLocationId = (int) ($data['location_id'] ?? 1);
+    $deviceContext = getDeviceScanContext();
+    $householdId = (int) ($deviceContext['household_id'] ?? $requestedHouseholdId ?: 1);
+    $locationId = (int) ($deviceContext['location_id'] ?? $requestedLocationId ?: 1);
     $movementType = (string) ($data['movement_type'] ?? 'in');
     $quantity = (float) ($data['quantity'] ?? 1);
 
@@ -495,6 +526,8 @@ function handleScan(PDO $pdo): void
             'movement_type' => $movementType,
             'quantity_delta' => $quantityDelta,
             'auto_added_to_shopping_list' => $autoAddedToShoppingList,
+            'household_id' => $householdId,
+            'location_id' => $locationId,
         ]);
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {

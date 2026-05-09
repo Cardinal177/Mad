@@ -8,6 +8,8 @@ function handleDeviceSetMode(): void
     // Token validation is only needed for ESP32 polling (GET endpoint)
     $data = parseJsonInput();
     $mode = (string) ($data['mode'] ?? '');
+    $householdId = isset($data['household_id']) ? max(1, (int) $data['household_id']) : 1;
+    $locationId = isset($data['location_id']) ? max(1, (int) $data['location_id']) : 1;
 
     if (!in_array($mode, ['in', 'out'], true)) {
         response(400, ['error' => 'Invalid mode, must be "in" or "out"']);
@@ -18,6 +20,8 @@ function handleDeviceSetMode(): void
     $modeFile = sys_get_temp_dir() . '/mad_device_mode.txt';
     $content = json_encode([
         'mode' => $mode,
+        'household_id' => $householdId,
+        'location_id' => $locationId,
         'timestamp' => time(),
         'set_at' => date('Y-m-d H:i:s'),
     ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
@@ -33,6 +37,8 @@ function handleDeviceSetMode(): void
     response(200, [
         'status' => 'ok',
         'mode' => $mode,
+        'household_id' => $householdId,
+        'location_id' => $locationId,
         'message' => 'Device mode set to ' . $mode,
     ]);
 }
@@ -71,6 +77,8 @@ function handleDeviceGetMode(): void
     response(200, [
         'status' => 'ok',
         'mode' => $mode,
+        'household_id' => (int) ($data['household_id'] ?? 1),
+        'location_id' => (int) ($data['location_id'] ?? 1),
         'set_at' => (string) ($data['set_at'] ?? 'unknown'),
     ]);
 }

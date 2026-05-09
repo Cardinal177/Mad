@@ -3596,8 +3596,11 @@ function setInventoryScanMode(mode, source = '') {
 
     // Notify backend if mode was changed by user click (for ESP32 feedback)
     if (source === 'klik') {
+        const selectedLocationId = Number(document.getElementById('ingredientLocationId')?.value || 0) || 1;
         void postJson('api.php?endpoint=device.set_mode', {
             mode: inventoryScanMode,
+            household_id: Number(householdId || 1),
+            location_id: selectedLocationId,
         }, {includeDeviceToken: true}).catch(err => {
             appendInventoryScanDebug(`Advarsel: kunne ikke updatere ESP32 mode: ${String(err?.message || err)}`);
         });
