@@ -3885,10 +3885,17 @@ async function registerInventoryMovement(barcode, locationIdRaw = '') {
         quantity: 1,
     }, {includeDeviceToken: true});
     const autoAdded = !!payload?.auto_added_to_shopping_list;
-    setInventoryScanStatus(`Lager registreret: ${inventoryScanMode === 'out' ? 'ud' : 'ind'} (${String(payload?.barcode || code)})${autoAdded ? ' · tilføjet til indkøbsliste' : ''}`);
+    const autoRemoved = !!payload?.auto_removed_from_shopping_list;
+    const listHint = autoAdded
+        ? ' · tilføjet til indkøbsliste'
+        : (autoRemoved ? ' · fjernet fra indkøbsliste' : '');
+    setInventoryScanStatus(`Lager registreret: ${inventoryScanMode === 'out' ? 'ud' : 'ind'} (${String(payload?.barcode || code)})${listHint}`);
     appendInventoryScanDebug(`API svar: ${String(payload?.status || 'ok')} ${String(payload?.message || '')}`);
     if (autoAdded) {
         appendInventoryScanDebug('Minimum nået: varen er automatisk tilføjet til indkøbslisten.');
+    }
+    if (autoRemoved) {
+        appendInventoryScanDebug('Minimum opfyldt igen: varen er fjernet fra indkøbslisten.');
     }
 }
 

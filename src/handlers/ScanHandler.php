@@ -259,6 +259,25 @@ function addProductToShoppingListIfMissing(PDO $pdo, int $householdId, int $prod
     return true;
 }
 
+function removeProductFromOpenShoppingListIfPresent(PDO $pdo, int $householdId, int $productId): bool
+{
+    if ($productId <= 0) {
+        return false;
+    }
+
+    $stmt = $pdo->prepare(
+        'DELETE si
+         FROM shopping_list_items si
+         INNER JOIN shopping_lists sl ON sl.id = si.shopping_list_id
+         WHERE sl.household_id = ?
+           AND sl.status = "open"
+           AND si.product_id = ?'
+    );
+    $stmt->execute([$householdId, $productId]);
+
+    return $stmt->rowCount() > 0;
+}
+
 function getDeviceScanContext(): array
 {
     $modeFile = sys_get_temp_dir() . '/mad_device_mode.txt';
@@ -517,6 +536,7 @@ function handleScan(PDO $pdo): void
         $stmt->execute([$householdId, $locationId, $productId]);
         $inventory = $stmt->fetch();
         $autoAddedToShoppingList = false;
+        $autoRemovedFromShoppingList = false;
 
         $quantityAfter = null;
         if ($inventory) {
@@ -528,6 +548,8 @@ function handleScan(PDO $pdo): void
             $minimumQuantity = (float) ($inventory['minimum_quantity'] ?? 0);
             if ($movementType === 'out' && $minimumQuantity > 0 && $newQuantity <= ($minimumQuantity + 0.0001)) {
                 $autoAddedToShoppingList = addProductToShoppingListIfMissing($pdo, $householdId, $productId, $resolvedProductName);
+            } elseif ($movementType === 'in' && $minimumQuantity > 0 && $newQuantity >= ($minimumQuantity - 0.0001)) {
+                $autoRemovedFromShoppingList = removeProductFromOpenShoppingListIfPresent($pdo, $householdId, $productId);
             }
         } else {
             $stmt = $pdo->prepare(
@@ -552,6 +574,7 @@ function handleScan(PDO $pdo): void
             'movement_type' => $movementType,
             'quantity_delta' => $quantityDelta,
             'auto_added_to_shopping_list' => $autoAddedToShoppingList,
+            'auto_removed_from_shopping_list' => $autoRemovedFromShoppingList,
             'household_id' => $householdId,
             'location_id' => $locationId,
         ]);
