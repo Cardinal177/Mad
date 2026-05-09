@@ -3546,6 +3546,100 @@ function initIngredientTools() {
     }
 }
 
+function initBarcodeScannerCapture() {
+    if (document.body.dataset.barcodeCaptureBound === '1') {
+        return;
+    }
+    document.body.dataset.barcodeCaptureBound = '1';
+
+    let buffer = '';
+    let lastKeyAt = 0;
+    let flushTimer = null;
+
+    const resetBuffer = () => {
+        buffer = '';
+        lastKeyAt = 0;
+        if (flushTimer) {
+            clearTimeout(flushTimer);
+            flushTimer = null;
+        }
+    };
+
+    const commitBufferToBarcodeField = async () => {
+        const code = String(buffer || '').trim();
+        resetBuffer();
+
+        if (code.length < 8) {
+            return;
+        }
+
+        const barcodeInput = document.getElementById('ingredientBarcode');
+        if (!(barcodeInput instanceof HTMLInputElement)) {
+            return;
+        }
+
+        const panel = document.getElementById('ingredientCreateDetails');
+        if (panel instanceof HTMLElement && panel.tagName.toLowerCase() === 'details') {
+            panel.setAttribute('open', 'open');
+        }
+
+        barcodeInput.value = code;
+        barcodeInput.dispatchEvent(new Event('input', {bubbles: true}));
+        barcodeInput.dispatchEvent(new Event('change', {bubbles: true}));
+
+        try {
+            await lookupIngredientFromBarcode();
+        } catch (_e) {
+            // lookupIngredientFromBarcode already handles user-facing status
+        }
+    };
+
+    document.addEventListener('keydown', (event) => {
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
+            return;
+        }
+
+        const active = document.activeElement;
+        const isTypingField = active instanceof HTMLInputElement
+            || active instanceof HTMLTextAreaElement
+            || (active instanceof HTMLElement && active.isContentEditable);
+
+        // Do not interfere with normal typing except when directly in barcode field.
+        if (isTypingField && (!(active instanceof HTMLInputElement) || active.id !== 'ingredientBarcode')) {
+            return;
+        }
+
+        const now = Date.now();
+        if (lastKeyAt && (now - lastKeyAt) > 100) {
+            buffer = '';
+        }
+        lastKeyAt = now;
+
+        if (event.key === 'Enter' || event.key === 'Tab') {
+            if (buffer.length >= 8) {
+                event.preventDefault();
+                void commitBufferToBarcodeField();
+            } else {
+                resetBuffer();
+            }
+            return;
+        }
+
+        if (/^[0-9A-Za-z\-]$/.test(event.key)) {
+            buffer += event.key;
+            if (flushTimer) {
+                clearTimeout(flushTimer);
+            }
+            flushTimer = setTimeout(() => {
+                void commitBufferToBarcodeField();
+            }, 140);
+            return;
+        }
+
+        resetBuffer();
+    }, true);
+}
+
 function fillSelect(selectId, items, formatter) {
     const select = document.getElementById(selectId);
     if (!select) {
@@ -3972,6 +4066,7 @@ document.getElementById('aiSuggestButton').addEventListener('click', fetchAiIdea
 window.addEventListener('hashchange', updateNavFromHash);
 initAdminConsole();
 initIngredientTools();
+initBarcodeScannerCapture();
 initShoppingListActions();
 initShoppingListKeyboardActions();
 applyTraditionalPage(<?= json_encode($currentPage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
