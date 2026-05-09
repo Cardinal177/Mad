@@ -74,3 +74,42 @@ function handleDeviceGetMode(): void
         'set_at' => (string) ($data['set_at'] ?? 'unknown'),
     ]);
 }
+
+function handleDeviceGetLastScan(): void
+{
+    $scanFile = sys_get_temp_dir() . '/mad_last_device_scan.txt';
+
+    if (!file_exists($scanFile)) {
+        response(200, [
+            'status' => 'ok',
+            'scan' => null,
+            'message' => 'No scans yet',
+        ]);
+        return;
+    }
+
+    $content = file_get_contents($scanFile);
+    $data = json_decode((string) $content, true);
+
+    if (!is_array($data) || !isset($data['barcode']) || !isset($data['timestamp'])) {
+        response(200, [
+            'status' => 'ok',
+            'scan' => null,
+            'message' => 'Invalid scan data',
+        ]);
+        return;
+    }
+
+    response(200, [
+        'status' => 'ok',
+        'scan' => [
+            'barcode' => (string) ($data['barcode'] ?? ''),
+            'movement_type' => (string) ($data['movement_type'] ?? 'in'),
+            'household_id' => (int) ($data['household_id'] ?? 1),
+            'location_id' => (int) ($data['location_id'] ?? 1),
+            'duplicate_ignored' => (bool) ($data['duplicate_ignored'] ?? false),
+            'timestamp' => (int) ($data['timestamp'] ?? 0),
+            'set_at' => (string) ($data['set_at'] ?? ''),
+        ],
+    ]);
+}

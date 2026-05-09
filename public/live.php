@@ -2067,6 +2067,7 @@ let inventoryCameraLastDetectAt = 0;
 let inventoryScanMode = 'in';
 let inventoryScanDebugLines = [];
 let inventoryLastProcessedScan = {signature: '', at: 0};
+let inventoryLastServerScanTimestamp = 0;
 
 if (params.get('device_token')) {
     window.localStorage.setItem('madDeviceToken', params.get('device_token'));
@@ -3582,6 +3583,43 @@ async function pollInventoryModeFromServer() {
     }
 }
 
+async function pollInventoryLastScanFromServer() {
+    try {
+        const response = await loadJson('api.php?endpoint=device.get_last_scan');
+        const scan = response?.scan;
+        if (!scan) {
+            return;
+        }
+
+        const timestamp = Number(scan.timestamp || 0);
+        if (!Number.isFinite(timestamp) || timestamp <= inventoryLastServerScanTimestamp) {
+            return;
+        }
+
+        inventoryLastServerScanTimestamp = timestamp;
+
+        const movement = String(scan.movement_type || 'in') === 'out' ? 'out' : 'in';
+        const code = String(scan.barcode || '').trim();
+        if (!code) {
+            return;
+        }
+
+        if (movement !== inventoryScanMode) {
+            setInventoryScanMode(movement, 'server scan');
+        }
+
+        const movementLabel = movement === 'out' ? 'ud' : 'ind';
+        setInventoryScanStatus(`Scanner (ESP32): ${code} (${movementLabel})`);
+        appendInventoryScanDebug(`ESP32 scan modtaget: ${code} (${movementLabel})`);
+
+        if (accessToken) {
+            void refresh();
+        }
+    } catch (e) {
+        // Ignore temporary polling/network errors.
+    }
+}
+
 function parseScannerModeCommand(rawValue) {
     const token = String(rawValue || '').trim().toLowerCase();
     if (!token) {
@@ -4853,6 +4891,8 @@ setInterval(refresh, 5000);
 const pollModeInterval = setInterval(pollInventoryModeFromServer, 500);  // Poll server for mode changes from ESP32 button
 console.log('[Init] Started mode polling interval:', pollModeInterval);
 pollInventoryModeFromServer();  // Initial poll
+setInterval(pollInventoryLastScanFromServer, 700);
+pollInventoryLastScanFromServer();
 </script>
 </body>
 </html>

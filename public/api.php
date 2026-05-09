@@ -171,6 +171,11 @@ try {
         exit;
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'device.get_last_scan') {
+        handleDeviceGetLastScan();
+        exit;
+    }
+
     $result = $pdo->query('SELECT NOW() AS server_time')->fetch();
     $tables = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
 

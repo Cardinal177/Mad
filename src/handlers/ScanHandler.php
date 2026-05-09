@@ -173,6 +173,26 @@ function normalizeBarcode(string $rawBarcode): string
     return $barcode;
 }
 
+function persistLastDeviceScan(string $barcode, string $movementType, int $householdId, int $locationId, bool $duplicateIgnored = false): void
+{
+    $scanFile = sys_get_temp_dir() . '/mad_last_device_scan.txt';
+    $content = json_encode([
+        'barcode' => $barcode,
+        'movement_type' => $movementType,
+        'household_id' => $householdId,
+        'location_id' => $locationId,
+        'duplicate_ignored' => $duplicateIgnored,
+        'timestamp' => time(),
+        'set_at' => date('Y-m-d H:i:s'),
+    ], JSON_UNESCAPED_SLASHES);
+
+    if ($content === false) {
+        return;
+    }
+
+    @file_put_contents($scanFile, $content);
+}
+
 function handleScan(PDO $pdo): void
 {
     $expectedDeviceToken = (string) (env_value('DEVICE_TOKEN', '') ?? '');
@@ -341,6 +361,7 @@ function handleScan(PDO $pdo): void
 
         if ($duplicate) {
             $pdo->commit();
+            persistLastDeviceScan($barcode, $movementType, $householdId, $locationId, true);
             response(200, [
                 'status' => 'ok',
                 'message' => 'Duplicate scan ignored',
@@ -391,6 +412,7 @@ function handleScan(PDO $pdo): void
         }
 
         $pdo->commit();
+        persistLastDeviceScan($barcode, $movementType, $householdId, $locationId, false);
 
         response(201, [
             'status' => 'ok',
