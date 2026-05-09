@@ -129,6 +129,8 @@ function handleDeviceGetLastScan(): void
             'household_id' => (int) ($data['household_id'] ?? 1),
             'location_id' => (int) ($data['location_id'] ?? 1),
             'duplicate_ignored' => (bool) ($data['duplicate_ignored'] ?? false),
+            'product_id' => isset($data['product_id']) ? (int) $data['product_id'] : 0,
+            'quantity_after' => isset($data['quantity_after']) && $data['quantity_after'] !== null ? (float) $data['quantity_after'] : null,
             'timestamp' => (int) ($data['timestamp'] ?? 0),
             'set_at' => (string) ($data['set_at'] ?? ''),
         ],

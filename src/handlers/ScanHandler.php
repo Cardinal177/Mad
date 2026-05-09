@@ -173,7 +173,15 @@ function normalizeBarcode(string $rawBarcode): string
     return $barcode;
 }
 
-function persistLastDeviceScan(string $barcode, string $movementType, int $householdId, int $locationId, bool $duplicateIgnored = false): void
+function persistLastDeviceScan(
+    string $barcode,
+    string $movementType,
+    int $householdId,
+    int $locationId,
+    bool $duplicateIgnored = false,
+    ?int $productId = null,
+    ?float $quantityAfter = null
+): void
 {
     $scanFile = sys_get_temp_dir() . '/mad_last_device_scan.txt';
     $content = json_encode([
@@ -182,6 +190,8 @@ function persistLastDeviceScan(string $barcode, string $movementType, int $house
         'household_id' => $householdId,
         'location_id' => $locationId,
         'duplicate_ignored' => $duplicateIgnored,
+        'product_id' => $productId,
+        'quantity_after' => $quantityAfter,
         'timestamp' => time(),
         'set_at' => date('Y-m-d H:i:s'),
     ], JSON_UNESCAPED_SLASHES);
@@ -456,7 +466,7 @@ function handleScan(PDO $pdo): void
 
         if ($duplicate) {
             $pdo->commit();
-            persistLastDeviceScan($barcode, $movementType, $householdId, $locationId, true);
+            persistLastDeviceScan($barcode, $movementType, $householdId, $locationId, true, $productId, null);
             response(200, [
                 'status' => 'ok',
                 'message' => 'Duplicate scan ignored',
@@ -495,10 +505,12 @@ function handleScan(PDO $pdo): void
         $inventory = $stmt->fetch();
         $autoAddedToShoppingList = false;
 
+        $quantityAfter = null;
         if ($inventory) {
             $newQuantity = (float) $inventory['quantity'] + $quantityDelta;
             $stmt = $pdo->prepare('UPDATE household_inventory SET quantity = ? WHERE id = ?');
             $stmt->execute([$newQuantity, (int) $inventory['id']]);
+            $quantityAfter = $newQuantity;
 
             $minimumQuantity = (float) ($inventory['minimum_quantity'] ?? 0);
             if ($movementType === 'out' && $minimumQuantity > 0 && $newQuantity <= ($minimumQuantity + 0.0001)) {
@@ -510,10 +522,11 @@ function handleScan(PDO $pdo): void
                  VALUES (?, ?, ?, ?)'
             );
             $stmt->execute([$householdId, $locationId, $productId, $quantityDelta]);
+            $quantityAfter = $quantityDelta;
         }
 
         $pdo->commit();
-        persistLastDeviceScan($barcode, $movementType, $householdId, $locationId, false);
+        persistLastDeviceScan($barcode, $movementType, $householdId, $locationId, false, $productId, $quantityAfter);
 
         response(201, [
             'status' => 'ok',

@@ -3638,6 +3638,12 @@ async function pollInventoryLastScanFromServer() {
 
         const movement = String(scan.movement_type || 'in') === 'out' ? 'out' : 'in';
         const code = String(scan.barcode || '').trim();
+        const scanProductId = Number(scan.product_id || 0);
+        const scanQuantityAfter = scan.quantity_after === null || scan.quantity_after === undefined
+            ? null
+            : Number(scan.quantity_after);
+        const scanHouseholdId = Number(scan.household_id || 0);
+        const scanLocationId = Number(scan.location_id || 0);
         if (!code) {
             return;
         }
@@ -3651,9 +3657,30 @@ async function pollInventoryLastScanFromServer() {
             setInventoryScanMode(movement, 'server scan');
         }
 
+        if (scanProductId > 0 && Number.isFinite(scanQuantityAfter)) {
+            let changed = false;
+            inventoryProductsCache = (Array.isArray(inventoryProductsCache) ? inventoryProductsCache : []).map((product) => {
+                const productId = Number(product?.id || 0);
+                const productLocationId = Number(product?.location_id || 0);
+                if (productId === scanProductId && (!scanLocationId || productLocationId === scanLocationId)) {
+                    changed = true;
+                    return {
+                        ...product,
+                        quantity: scanQuantityAfter,
+                    };
+                }
+                return product;
+            });
+
+            if (changed) {
+                renderProducts(inventoryProductsCache);
+                initInventoryCardActions();
+            }
+        }
+
         const movementLabel = movement === 'out' ? 'ud' : 'ind';
         setInventoryScanStatus(`Scanner (ESP32): ${code} (${movementLabel})`);
-        appendInventoryScanDebug(`ESP32 scan modtaget: ${code} (${movementLabel})`);
+        appendInventoryScanDebug(`ESP32 scan modtaget: ${code} (${movementLabel}) hh=${scanHouseholdId || '-'} loc=${scanLocationId || '-'} qty=${scanQuantityAfter ?? '-'}`);
 
         if (accessToken) {
             void refresh();
