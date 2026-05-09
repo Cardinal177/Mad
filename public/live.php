@@ -501,7 +501,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
         .recipe-grid,
         .settings-grid {
             display: grid;
-            gap: 12px;
+            gap: 8px;
         }
         .inventory-card,
         .scan-card,
@@ -518,19 +518,20 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             overflow: hidden;
             background:
                 linear-gradient(180deg, rgba(255,252,247,0.98) 0%, rgba(246,238,227,0.92) 100%);
+            padding: 10px 12px;
         }
         .inventory-visual {
             display: grid;
-            grid-template-columns: 86px minmax(0, 1fr);
-            gap: 14px;
+            grid-template-columns: 40px minmax(0, 1fr) auto;
+            gap: 10px;
             align-items: center;
-            margin-bottom: 14px;
         }
         .inventory-image,
         .inventory-image-fallback {
-            width: 86px;
-            height: 86px;
-            border-radius: 18px;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            flex-shrink: 0;
         }
         .inventory-image {
             object-fit: cover;
@@ -543,7 +544,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             background: linear-gradient(135deg, rgba(47,106,86,0.12), rgba(236,226,212,0.8));
             color: var(--accent);
             font-family: "Iowan Old Style", "Palatino Linotype", serif;
-            font-size: 28px;
+            font-size: 16px;
         }
         .inventory-top,
         .scan-top {
@@ -555,30 +556,31 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
         .inventory-name,
         .scan-name {
             margin: 0;
-            font-size: 17px;
+            font-size: 14px;
             line-height: 1.2;
+            font-weight: 700;
         }
         .inventory-code,
         .scan-time,
         .placeholder-copy {
-            margin: 4px 0 0;
+            margin: 2px 0 0;
             color: var(--muted);
-            font-size: 13px;
-            line-height: 1.4;
+            font-size: 11px;
+            line-height: 1.3;
         }
         .inventory-brand {
-            margin: 6px 0 0;
+            margin: 1px 0 0;
             color: var(--accent);
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 600;
         }
         .state-badge {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
             border-radius: 999px;
-            padding: 7px 10px;
-            font-size: 12px;
+            padding: 3px 8px;
+            font-size: 11px;
             font-weight: 700;
             white-space: nowrap;
         }
@@ -594,28 +596,40 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             background: rgba(143, 79, 79, 0.14);
             color: var(--berry);
         }
+        .inventory-qty-col {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }
+        .inventory-qty-main {
+            font-size: 20px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .inventory-qty-min {
+            font-size: 10px;
+            color: var(--muted);
+        }
         .inventory-meta,
         .scan-meta {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
-            margin-top: 14px;
+            display: none;
         }
         .meta-block {
-            padding: 12px;
-            border-radius: 16px;
+            padding: 8px 10px;
+            border-radius: 12px;
             background: rgba(236, 226, 212, 0.58);
         }
         .meta-label {
             display: block;
             color: var(--muted);
-            font-size: 11px;
+            font-size: 10px;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
         }
         .meta-value {
-            font-size: 22px;
+            font-size: 18px;
             font-weight: 700;
             line-height: 1;
         }
@@ -650,17 +664,18 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             font-size: 12px;
         }
         .inventory-card-actions {
-            margin-top: 10px;
+            margin-top: 6px;
             display: flex;
             justify-content: flex-end;
+            gap: 6px;
         }
         .inventory-add-shopping {
             border: 1px solid var(--line);
             background: rgba(47, 106, 86, 0.1);
             color: var(--accent);
-            border-radius: 10px;
-            padding: 6px 10px;
-            font-size: 12px;
+            border-radius: 8px;
+            padding: 4px 8px;
+            font-size: 11px;
             font-weight: 700;
             cursor: pointer;
         }
@@ -2526,36 +2541,20 @@ function renderProducts(products) {
             : '';
         const weightValue = Number(product.weight_grams ?? 0);
         const hasWeight = Number.isFinite(weightValue) && weightValue > 0;
+        const infoLine = [product.brand, locationBadge ? (product.location_name || '') : '', typeBadge ? '' : ''].filter(Boolean).join(' · ');
         return `<article class="inventory-card" data-product-id="${esc(String(product.id || ''))}" data-location-id="${esc(String(product.location_id || ''))}" data-barcode="${esc(String(product.barcode || ''))}">
             <div class="inventory-visual">
                 ${image}
                 <div>
-                    <div class="inventory-top">
-                        <div>
-                            <h3 class="inventory-name">${esc(product.name || 'Ukendt vare')}</h3>
-                            <p class="inventory-brand">${esc(product.brand || '')}</p>
-                        </div>
-                        <span class="state-badge ${state.className}">${esc(state.label)}</span>
-                    </div>
-                    <div class="inventory-badges">${typeBadge}${locationBadge}</div>
+                    <h3 class="inventory-name">${esc(product.name || 'Ukendt vare')}</h3>
+                    <p class="inventory-brand">${[product.brand, product.location_name ? (locationTypeIcon(product.location_type) + ' ' + product.location_name) : ''].filter(Boolean).join(' · ')}</p>
+                </div>
+                <div class="inventory-qty-col">
+                    <span class="state-badge ${state.className}" style="margin-bottom:2px">${esc(state.label)}</span>
+                    <span class="inventory-qty-main" data-field="quantity">${esc(formatQuantity(product.quantity ?? 0))}</span>
+                    <span class="inventory-qty-min">min ${esc(formatQuantity(product.minimum_quantity ?? 0))}</span>
                 </div>
             </div>
-            <div class="inventory-meta">
-                <div class="meta-block">
-                    <span class="meta-label">Beholdning</span>
-                    <div class="meta-value" data-field="quantity">${esc(formatQuantity(product.quantity ?? 0))}</div>
-                </div>
-                <div class="meta-block">
-                    <span class="meta-label">Minimum</span>
-                    <div class="meta-value">${esc(formatQuantity(product.minimum_quantity ?? 0))}</div>
-                </div>
-                <div class="meta-block">
-                    <span class="meta-label">Vægt</span>
-                    <div class="meta-value">${hasWeight ? esc(String(Math.round(weightValue)) + ' g') : '-'}</div>
-                </div>
-            </div>
-            ${priceStrip}
-            ${nutritionStrip}
             <div class="inventory-card-actions">
                 <button class="inventory-add-shopping"
                     data-product-action="edit-ingredient"
@@ -2564,7 +2563,7 @@ function renderProducts(products) {
                     data-product-action="add-to-shopping"
                     data-product-id="${esc(String(product.id || ''))}"
                     data-product-name="${esc(product.name || 'Ukendt vare')}"
-                    data-store="${esc(product.offer_store || product.standard_store || '')}">Tilføj til indkøbsliste</button>
+                    data-store="${esc(product.offer_store || product.standard_store || '')}">+ Indkøbsliste</button>
             </div>
         </article>`;
     }).join('');
