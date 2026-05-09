@@ -1122,6 +1122,12 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
         }
         .shopping-row-main {
             min-width: 0;
+            cursor: pointer;
+            border-radius: 8px;
+            padding: 2px 0;
+        }
+        .shopping-row-main:active {
+            background: rgba(47,106,86,0.08);
         }
         .shopping-name {
             margin: 0;
@@ -2181,9 +2187,36 @@ function productTypeLabel(type) {
         'drikke': 'Drikke',
         'konserves': 'Konserves',
         'brød': 'Brød',
-        'andet': 'Andet',
+        'andet': 'Diverse',
     };
-    return map[String(type || '')] || String(type || 'Andet');
+    return map[String(type || '')] || String(type || 'Diverse');
+}
+
+function inferCategoryLabelFromName(name) {
+    const text = normalizeSearchText(name);
+    if (!text) {
+        return 'Diverse';
+    }
+
+    const rules = [
+        {label: 'Mejeri', tokens: ['maelk', 'yoghurt', 'skyr', 'ost', 'smoer', 'floe', 'flode']},
+        {label: 'Koed', tokens: ['kylling', 'okse', 'svin', 'koed', 'boef', 'boef', 'fars', 'paalaeg', 'palaeg']},
+        {label: 'Fisk & skaldyr', tokens: ['fisk', 'laks', 'tun', 'reje', 'torsk']},
+        {label: 'Frugt & groent', tokens: ['tomat', 'agurk', 'salat', 'banan', 'aeble', 'apple', 'groent', 'frugt', 'kartoffel', 'loeg', 'log']},
+        {label: 'Broed', tokens: ['broed', 'brod', 'rugbroed', 'rugbrod', 'bolle', 'toast']},
+        {label: 'Drikke', tokens: ['juice', 'sodavand', 'vand', 'kaffe', 'te', 'cola']},
+        {label: 'Frostvare', tokens: ['frost', 'pizza', 'is']},
+        {label: 'Konserves', tokens: ['daase', 'dase', 'hakkede tomater', 'baked beans', 'tun i vand']},
+        {label: 'Toervare', tokens: ['pasta', 'ris', 'mel', 'gryn', 'havre', 'sukker']},
+    ];
+
+    for (const rule of rules) {
+        if (rule.tokens.some(token => text.includes(token))) {
+            return rule.label;
+        }
+    }
+
+    return 'Diverse';
 }
 
 function locationTypeIcon(locType) {
@@ -2415,11 +2448,17 @@ function renderShoppingList(items, shoppingList = null) {
         : '';
 
     const rowsHtml = sortedItems.map(item => {
-        const typeText = productTypeLabel(item?.product_type || 'andet');
+        const baseType = productTypeLabel(item?.product_type || 'andet');
+        const typeText = (String(item?.product_type || 'andet') === 'andet')
+            ? inferCategoryLabelFromName(item?.product_name || '')
+            : baseType;
         const storeText = String(item?.preferred_store || '').trim();
         const metaParts = [typeText];
         if (storeText) {
             metaParts.push(storeText);
+        }
+        if (item?.offer_price !== null && item?.offer_price !== undefined) {
+            metaParts.push('Tilbud ' + formatDkk(item.offer_price));
         }
         if (item?.brand) {
             metaParts.push(String(item.brand));
@@ -2438,7 +2477,13 @@ function renderShoppingList(items, shoppingList = null) {
                 data-next-checked="${isChecked ? '0' : '1'}"
                 aria-label="${isChecked ? 'Fjern markering' : 'Marker som koebt'}"
                 title="${isChecked ? 'Fortryd koebt' : 'Marker som koebt'}">${isChecked ? 'OK' : '+'}</button>
-            <div class="shopping-row-main">
+            <div class="shopping-row-main"
+                data-shopping-action="toggle"
+                data-item-id="${itemId}"
+                data-next-checked="${isChecked ? '0' : '1'}"
+                role="button"
+                aria-label="${isChecked ? 'Fjern markering' : 'Marker som koebt'}"
+                tabindex="0">
                 <p class="shopping-name">${esc(item?.product_name || 'Ukendt vare')}</p>
                 <p class="shopping-meta">${esc(metaParts.join(' · '))}</p>
             </div>
@@ -2511,6 +2556,33 @@ function initShoppingListActions() {
             alert('Kunne ikke opdatere indkoebssedlen: ' + String(e?.message || e));
             actionButton.disabled = false;
         }
+    });
+}
+
+function initShoppingListKeyboardActions() {
+    const body = document.getElementById('shoppingBody');
+    if (!body || body.dataset.keyboardBound === '1') {
+        return;
+    }
+
+    body.dataset.keyboardBound = '1';
+    body.addEventListener('keydown', async (event) => {
+        if (!(event.target instanceof HTMLElement)) {
+            return;
+        }
+
+        const isToggleTarget = event.target.hasAttribute('data-shopping-action')
+            && event.target.getAttribute('data-shopping-action') === 'toggle';
+        if (!isToggleTarget) {
+            return;
+        }
+
+        if (event.key !== 'Enter' && event.key !== ' ') {
+            return;
+        }
+
+        event.preventDefault();
+        event.target.click();
     });
 }
 
@@ -2757,7 +2829,7 @@ function attachLeafletOfferHandlers(offers, suggestionOffers = null) {
                     <div style="font-weight:700; font-size:14px;">${esc(item.product_name || 'Ukendt vare')}</div>
                     <div style="font-size:12px; color: var(--muted);">${esc(item.store_name || 'Ukendt butik')} · ${esc(formatDkk(item.price))}</div>
                 </div>
-                <button class="leaflet-suggestion-add" data-title="${esc(item.product_name || 'Ukendt vare')}" data-store="${esc(item.store_name || '')}" style="padding:6px 10px; border-radius:10px; background: var(--accent); color:white; border:none; cursor:pointer; font-weight:700; white-space:nowrap;">Tilføj</button>
+                <button class="leaflet-suggestion-add" data-title="${esc(item.product_name || 'Ukendt vare')}" data-store="${esc(item.store_name || '')}" data-offer-id="${esc(item.id || '')}" style="padding:6px 10px; border-radius:10px; background: var(--accent); color:white; border:none; cursor:pointer; font-weight:700; white-space:nowrap;">Tilføj</button>
             </div>
         `).join('');
     }
@@ -2805,12 +2877,13 @@ function attachLeafletOfferHandlers(offers, suggestionOffers = null) {
 
             const title = target.dataset.title || '';
             const store = target.dataset.store || '';
+            const offerId = Number(target.dataset.offerId || 0);
             if (!title) {
                 return;
             }
 
             try {
-                await addLeafletOffersToShopping([{title, store}]);
+                await addLeafletOffersToShopping([{title, store, offerId}]);
                 alert('1 vare tilføjet til indkøbsseddel');
                 await refresh();
             } catch (e) {
@@ -3569,6 +3642,7 @@ window.addEventListener('hashchange', updateNavFromHash);
 initAdminConsole();
 initIngredientTools();
 initShoppingListActions();
+initShoppingListKeyboardActions();
 applyTraditionalPage(<?= json_encode($currentPage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
 updateNavFromHash();
 initAuthGate();

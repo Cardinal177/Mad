@@ -878,10 +878,36 @@ function handleShoppingList(PDO $pdo): void
                 si.quantity,
                 si.preferred_store,
                 si.is_checked,
+                si.offer_price,
+                si.offer_valid_until,
                 si.created_at,
                 p.name AS linked_product_name,
                 p.brand,
-                p.product_type
+                p.product_type,
+                (
+                    SELECT so.price
+                    FROM store_offers so
+                    WHERE LOWER(TRIM(so.title)) = LOWER(TRIM(si.product_name))
+                      AND (
+                          si.preferred_store IS NULL
+                          OR TRIM(si.preferred_store) = ""
+                          OR LOWER(TRIM(so.store_name)) = LOWER(TRIM(si.preferred_store))
+                      )
+                    ORDER BY so.created_at DESC, so.id DESC
+                    LIMIT 1
+                ) AS fallback_offer_price,
+                (
+                    SELECT so.valid_to
+                    FROM store_offers so
+                    WHERE LOWER(TRIM(so.title)) = LOWER(TRIM(si.product_name))
+                      AND (
+                          si.preferred_store IS NULL
+                          OR TRIM(si.preferred_store) = ""
+                          OR LOWER(TRIM(so.store_name)) = LOWER(TRIM(si.preferred_store))
+                      )
+                    ORDER BY so.created_at DESC, so.id DESC
+                    LIMIT 1
+                ) AS fallback_offer_valid_to
              FROM shopping_list_items si
              LEFT JOIN products p ON p.id = si.product_id
              WHERE si.shopping_list_id = ?
@@ -903,6 +929,12 @@ function handleShoppingList(PDO $pdo): void
                 'product_type' => (string) ($row['product_type'] ?? 'andet'),
                 'quantity' => max((float) ($row['quantity'] ?? 1), 1.0),
                 'preferred_store' => (string) ($row['preferred_store'] ?? ''),
+                'offer_price' => ($row['offer_price'] !== null)
+                    ? (float) $row['offer_price']
+                    : (($row['fallback_offer_price'] !== null) ? (float) $row['fallback_offer_price'] : null),
+                'offer_valid_to' => ($row['offer_valid_until'] !== null)
+                    ? (string) $row['offer_valid_until']
+                    : (($row['fallback_offer_valid_to'] !== null) ? (string) $row['fallback_offer_valid_to'] : null),
                 'is_checked' => !empty($row['is_checked']),
                 'created_at' => $row['created_at'] !== null ? (string) $row['created_at'] : null,
             ];
@@ -1009,9 +1041,27 @@ function handleShoppingListAddItems(PDO $pdo): void
         foreach ($items as $item) {
             $productName = trim((string) ($item['title'] ?? ''));
             $preferredStore = trim((string) ($item['store'] ?? ''));
+            $offerId = (int) ($item['offerId'] ?? 0);
+            $offerPrice = null;
+            $offerValidUntil = null;
 
             if ($productName === '') {
                 continue;
+            }
+
+            if ($offerId > 0) {
+                $offerStmt = $pdo->prepare(
+                    'SELECT price, valid_to
+                     FROM store_offers
+                     WHERE id = ?
+                     LIMIT 1'
+                );
+                $offerStmt->execute([$offerId]);
+                $offerRow = $offerStmt->fetch();
+                if ($offerRow) {
+                    $offerPrice = $offerRow['price'] !== null ? (float) $offerRow['price'] : null;
+                    $offerValidUntil = $offerRow['valid_to'] !== null ? (string) $offerRow['valid_to'] : null;
+                }
             }
 
             // Check if item already exists in this shopping list with same name and store
@@ -1027,14 +1077,16 @@ function handleShoppingListAddItems(PDO $pdo): void
 
             // Add item to shopping list
             $stmt = $pdo->prepare(
-                'INSERT INTO shopping_list_items (shopping_list_id, product_name, quantity, preferred_store)
-                 VALUES (?, ?, ?, ?)'
+                'INSERT INTO shopping_list_items (shopping_list_id, product_name, quantity, preferred_store, offer_price, offer_valid_until)
+                 VALUES (?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
                 $shoppingListId,
                 $productName,
                 1,
                 $preferredStore !== '' ? $preferredStore : null,
+                $offerPrice,
+                $offerValidUntil,
             ]);
             $addedCount++;
         }
