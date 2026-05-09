@@ -27,7 +27,22 @@ declare(strict_types=1);
             backdrop-filter: blur(8px);
             padding: 10px 2px;
         }
+        .top-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
         h1 { margin: 0; font-size: 20px; }
+        .logout-btn {
+            border: 1px solid rgba(192,57,43,0.45);
+            color: #c0392b;
+            background: rgba(192,57,43,0.06);
+            border-radius: 10px;
+            padding: 7px 10px;
+            font-size: 13px;
+            font-weight: 700;
+        }
         .sub { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
         .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.04); }
         .stack { display: grid; gap: 10px; }
@@ -171,7 +186,6 @@ declare(strict_types=1);
         <p>Skriv initialer, modtag SMS-kode, og indtast den for adgang.</p>
         <div class="auth-grid">
             <input id="gateInitials" type="text" maxlength="6" placeholder="Initialer" autocapitalize="characters" autocomplete="username">
-            <button id="gateSend" class="btn-primary" type="button">Send kode</button>
             <input id="gateCode" type="text" maxlength="6" inputmode="numeric" placeholder="SMS kode (6 cifre)" autocomplete="one-time-code">
             <button id="gateVerify" class="btn-primary" type="button">Log ind</button>
             <div id="gateStatus" class="status">2FA påkrævet.</div>
@@ -181,7 +195,10 @@ declare(strict_types=1);
 
 <main id="app" class="wrap" aria-hidden="true" inert>
     <header class="top">
-        <h1>Mobil indkøbsseddel</h1>
+        <div class="top-head">
+            <h1>Mobil indkøbsseddel</h1>
+            <button id="logoutBtn" class="logout-btn" type="button">Log ud</button>
+        </div>
         <p class="sub" id="who">Henter session...</p>
     </header>
 
@@ -216,6 +233,9 @@ if (queryAccessToken) {
 let accessToken = queryAccessToken || window.localStorage.getItem('madAccessToken') || '';
 let householdId = Number(params.get('household_id') || 0) || 0;
 let challengeId = '';
+let gateLastRequestedInitials = '';
+let gateLastRequestedAt = 0;
+let gateRequestInFlight = false;
 let inventoryProducts = [];
 let shoppingItems = [];
 
@@ -282,6 +302,29 @@ function lockApp() {
         app.setAttribute('aria-hidden', 'true');
         app.setAttribute('inert', '');
     }
+}
+
+function logoutApp() {
+    accessToken = '';
+    challengeId = '';
+    gateLastRequestedInitials = '';
+    gateLastRequestedAt = 0;
+    window.localStorage.removeItem('madAccessToken');
+    const codeInput = document.getElementById('gateCode');
+    const initialsInput = document.getElementById('gateInitials');
+    if (codeInput instanceof HTMLInputElement) {
+        codeInput.value = '';
+    }
+    if (initialsInput instanceof HTMLInputElement) {
+        initialsInput.value = '';
+        initialsInput.focus();
+    }
+    const who = document.getElementById('who');
+    if (who) {
+        who.textContent = 'Ikke logget ind';
+    }
+    setStatus('gateStatus', 'Logget ud. Skriv initialer for ny kode.');
+    lockApp();
 }
 
 function unlockApp() {
@@ -440,10 +483,9 @@ async function refreshInventoryCache() {
     inventoryProducts = Array.isArray(payload?.products) ? payload.products : [];
 }
 
-async function requestCode() {
+async function requestCode(force = false) {
     const initialsEl = document.getElementById('gateInitials');
     const codeEl = document.getElementById('gateCode');
-    const sendBtn = document.getElementById('gateSend');
     const initials = String(initialsEl?.value || '').trim().toUpperCase();
     if (initialsEl) {
         initialsEl.value = initials;
@@ -452,22 +494,28 @@ async function requestCode() {
         setStatus('gateStatus', 'Skriv initialer.', true);
         return;
     }
+    if (gateRequestInFlight) {
+        return;
+    }
+    const now = Date.now();
+    const isRecentSameInitials = initials === gateLastRequestedInitials && (now - gateLastRequestedAt) < 30000;
+    if (!force && isRecentSameInitials) {
+        return;
+    }
     setStatus('gateStatus', 'Sender SMS-kode...');
+    gateRequestInFlight = true;
     try {
-        if (sendBtn instanceof HTMLButtonElement) {
-            sendBtn.disabled = true;
-        }
         const payload = await apiPost('api.php?endpoint=auth.request_code', {initials});
         challengeId = String(payload?.challenge_id || '');
+        gateLastRequestedInitials = initials;
+        gateLastRequestedAt = Date.now();
         setStatus('gateStatus', 'SMS-kode sendt. Indtast koden.');
         if (codeEl instanceof HTMLInputElement) {
             codeEl.focus();
             codeEl.select();
         }
     } finally {
-        if (sendBtn instanceof HTMLButtonElement) {
-            sendBtn.disabled = false;
-        }
+        gateRequestInFlight = false;
     }
 }
 
@@ -533,14 +581,6 @@ async function bootstrap() {
     }
 }
 
-document.getElementById('gateSend')?.addEventListener('click', async () => {
-    try {
-        await requestCode();
-    } catch (e) {
-        setStatus('gateStatus', 'Fejl ved SMS: ' + String(e?.message || e), true);
-    }
-});
-
 document.getElementById('gateVerify')?.addEventListener('click', async () => {
     try {
         await verifyCode();
@@ -560,7 +600,23 @@ gateInitialsInput?.addEventListener('keydown', async (event) => {
     if (event.key !== 'Enter') return;
     event.preventDefault();
     try {
-        await requestCode();
+        await requestCode(true);
+    } catch (e) {
+        setStatus('gateStatus', 'Fejl ved SMS: ' + String(e?.message || e), true);
+    }
+});
+
+gateCodeInput?.addEventListener('focus', async () => {
+    try {
+        await requestCode(false);
+    } catch (e) {
+        setStatus('gateStatus', 'Fejl ved SMS: ' + String(e?.message || e), true);
+    }
+});
+
+gateCodeInput?.addEventListener('click', async () => {
+    try {
+        await requestCode(false);
     } catch (e) {
         setStatus('gateStatus', 'Fejl ved SMS: ' + String(e?.message || e), true);
     }
@@ -574,6 +630,10 @@ gateCodeInput?.addEventListener('keydown', async (event) => {
     } catch (e) {
         setStatus('gateStatus', 'Fejl ved login: ' + String(e?.message || e), true);
     }
+});
+
+document.getElementById('logoutBtn')?.addEventListener('click', () => {
+    logoutApp();
 });
 
 const addInput = document.getElementById('addInput');
