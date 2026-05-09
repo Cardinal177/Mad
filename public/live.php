@@ -2410,7 +2410,7 @@ function renderShoppingCandidates(items) {
     }).join('');
 }
 
-function renderShoppingList(items, shoppingList = null) {
+function renderShoppingList(items, shoppingList = null, candidateItems = []) {
     const body = document.getElementById('shoppingBody');
     if (!body) {
         return;
@@ -2447,6 +2447,41 @@ function renderShoppingList(items, shoppingList = null) {
         ? `<div class="nutrition-note" style="margin-bottom: 8px;">${esc(shoppingList.title)}</div>`
         : '';
 
+    const offerByNameStore = new Map();
+    const offerByName = new Map();
+    (Array.isArray(candidateItems) ? candidateItems : []).forEach(candidate => {
+        const rawName = String(candidate?.product_name || '').trim();
+        const offerPrice = candidate?.offer_price;
+        if (!rawName || offerPrice === null || offerPrice === undefined) {
+            return;
+        }
+
+        const normalizedName = normalizeSearchText(rawName);
+        if (!normalizedName) {
+            return;
+        }
+
+        const rawStore = String(candidate?.offer_store || '').trim();
+        const normalizedStore = normalizeSearchText(rawStore);
+        const priceValue = Number(offerPrice);
+        if (Number.isNaN(priceValue)) {
+            return;
+        }
+
+        if (normalizedStore) {
+            const storeKey = `${normalizedName}|${normalizedStore}`;
+            const existingStorePrice = offerByNameStore.get(storeKey);
+            if (existingStorePrice === undefined || priceValue < existingStorePrice) {
+                offerByNameStore.set(storeKey, priceValue);
+            }
+        }
+
+        const existingPrice = offerByName.get(normalizedName);
+        if (existingPrice === undefined || priceValue < existingPrice) {
+            offerByName.set(normalizedName, priceValue);
+        }
+    });
+
     const rowsHtml = sortedItems.map(item => {
         const baseType = productTypeLabel(item?.product_type || 'andet');
         const typeText = (String(item?.product_type || 'andet') === 'andet')
@@ -2457,8 +2492,27 @@ function renderShoppingList(items, shoppingList = null) {
         if (storeText) {
             metaParts.push(storeText);
         }
-        if (item?.offer_price !== null && item?.offer_price !== undefined) {
-            metaParts.push('Tilbud ' + formatDkk(item.offer_price));
+        let rowPrice = (item?.offer_price !== null && item?.offer_price !== undefined)
+            ? Number(item.offer_price)
+            : null;
+        if (rowPrice === null || Number.isNaN(rowPrice)) {
+            const normalizedName = normalizeSearchText(item?.product_name || '');
+            const normalizedStore = normalizeSearchText(storeText);
+            if (normalizedName) {
+                if (normalizedStore) {
+                    const storeKey = `${normalizedName}|${normalizedStore}`;
+                    if (offerByNameStore.has(storeKey)) {
+                        rowPrice = Number(offerByNameStore.get(storeKey));
+                    }
+                }
+                if ((rowPrice === null || Number.isNaN(rowPrice)) && offerByName.has(normalizedName)) {
+                    rowPrice = Number(offerByName.get(normalizedName));
+                }
+            }
+        }
+
+        if (rowPrice !== null && !Number.isNaN(rowPrice)) {
+            metaParts.push('Tilbud ' + formatDkk(rowPrice));
         }
         if (item?.brand) {
             metaParts.push(String(item.brand));
@@ -2527,22 +2581,27 @@ function initShoppingListActions() {
             return;
         }
 
-        const actionButton = target.closest('[data-shopping-action]');
-        if (!(actionButton instanceof HTMLButtonElement)) {
+        const actionTarget = target.closest('[data-shopping-action]');
+        if (!(actionTarget instanceof HTMLElement)) {
             return;
         }
 
-        const itemId = Number(actionButton.dataset.itemId || 0);
+        const itemId = Number(actionTarget.dataset.itemId || 0);
         if (itemId <= 0) {
             return;
         }
 
-        const action = actionButton.dataset.shoppingAction || '';
-        actionButton.disabled = true;
+        const action = actionTarget.dataset.shoppingAction || '';
+        const disableElement = (actionTarget instanceof HTMLButtonElement) ? actionTarget : null;
+        if (disableElement) {
+            disableElement.disabled = true;
+        } else {
+            actionTarget.classList.add('is-busy');
+        }
 
         try {
             if (action === 'toggle') {
-                const nextChecked = actionButton.dataset.nextChecked === '1';
+                const nextChecked = actionTarget.dataset.nextChecked === '1';
                 await setShoppingItemChecked(itemId, nextChecked);
                 await refresh();
                 return;
@@ -2554,7 +2613,11 @@ function initShoppingListActions() {
             }
         } catch (e) {
             alert('Kunne ikke opdatere indkoebssedlen: ' + String(e?.message || e));
-            actionButton.disabled = false;
+            if (disableElement) {
+                disableElement.disabled = false;
+            } else {
+                actionTarget.classList.remove('is-busy');
+            }
         }
     });
 }
@@ -3566,7 +3629,7 @@ async function refresh() {
         renderScans(scans);
         renderProducts(productList);
         if (shoppingListItems.length > 0) {
-            renderShoppingList(shoppingListItems, shoppingList.list || null);
+            renderShoppingList(shoppingListItems, shoppingList.list || null, shopping.items || []);
         } else {
             // Fallback to candidate view so users still see actionable items before first manual add.
             renderShoppingCandidates(shoppingCandidateItems);
