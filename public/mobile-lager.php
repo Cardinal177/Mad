@@ -228,6 +228,8 @@ let challengeId = '';
 let gateLastRequestedInitials = '';
 let gateLastRequestedAt = 0;
 let gateRequestInFlight = false;
+let gateAutoVerifyInFlight = false;
+let gateLastAutoVerifyCode = '';
 let movementType = 'in';
 let stream = null;
 let detector = null;
@@ -646,6 +648,28 @@ gateCodeInput?.addEventListener('keydown', async (event) => {
         await verifyCode();
     } catch (e) {
         setStatus('gateStatus', 'Fejl ved login: ' + String(e?.message || e), true);
+    }
+});
+
+gateCodeInput?.addEventListener('input', async () => {
+    const raw = String(gateCodeInput.value || '');
+    const digits = raw.replace(/\D+/g, '').slice(0, 6);
+    gateCodeInput.value = digits;
+    if (digits.length !== 6 || !challengeId) {
+        return;
+    }
+    if (gateAutoVerifyInFlight || gateLastAutoVerifyCode === digits) {
+        return;
+    }
+
+    gateAutoVerifyInFlight = true;
+    gateLastAutoVerifyCode = digits;
+    try {
+        await verifyCode();
+    } catch (e) {
+        setStatus('gateStatus', 'Fejl ved login: ' + String(e?.message || e), true);
+    } finally {
+        gateAutoVerifyInFlight = false;
     }
 });
 

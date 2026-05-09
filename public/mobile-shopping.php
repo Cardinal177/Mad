@@ -79,53 +79,65 @@ declare(strict_types=1);
         .sg-meta { font-size: 12px; color: var(--muted); }
         .sg-add { font-size: 13px; color: var(--accent); border-color: var(--accent); padding: 6px 10px; }
         .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-        .item {
+        .item-shell {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .item-card {
             display: grid;
-            grid-template-columns: auto 1fr auto;
+            grid-template-columns: 1fr;
             gap: 10px;
             align-items: center;
             border: 1px solid var(--line);
             border-radius: 12px;
             padding: 10px;
             background: #fff;
+            transition: transform 0.18s ease;
+            position: relative;
+            z-index: 2;
+            touch-action: pan-y;
         }
-        .item.checked {
+        .item-shell.checked .item-card {
             background: #f5f6f5;
             border-color: #d8dfdb;
         }
-        .item.checked .name,
-        .item.checked .meta,
-        .item.checked .price {
+        .item-shell.checked .name,
+        .item-shell.checked .meta,
+        .item-shell.checked .price {
             color: #8a938e;
         }
-        .item.checked .name {
+        .item-shell.checked .name {
             text-decoration: line-through;
             text-decoration-thickness: 1.5px;
         }
-        .item-main { cursor: pointer; }
-        .check {
-            width: 34px;
-            height: 34px;
-            padding: 0;
-            display: inline-flex;
+        .item-main {
+            cursor: pointer;
+            user-select: none;
+        }
+        .item-shell.swiped .item-card {
+            transform: translateX(-92px);
+        }
+        .swipe-delete {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 92px;
+            border: 1px solid rgba(192,57,43,0.45);
+            border-left: none;
+            border-radius: 0;
+            color: var(--danger);
+            background: rgba(192,57,43,0.1);
+            font-weight: 700;
+            z-index: 1;
+            display: flex;
             align-items: center;
             justify-content: center;
-            line-height: 1;
-            border-radius: 10px;
-            border: 1px solid var(--accent);
-            color: var(--accent);
-            font-weight: 700;
-            background: rgba(47,106,86,0.1);
-        }
-        .item.checked .check {
-            border-color: #8fb3a4;
-            color: #7aa391;
-            background: rgba(143,179,164,0.16);
         }
         .name { margin: 0; font-size: 15px; font-weight: 700; }
         .meta { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
         .price { font-size: 12px; color: var(--accent); font-weight: 700; }
-        .remove { border-color: rgba(192,57,43,0.4); color: var(--danger); background: rgba(192,57,43,0.05); }
         .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 20px 8px; }
 
         .bottom-nav {
@@ -236,6 +248,8 @@ let challengeId = '';
 let gateLastRequestedInitials = '';
 let gateLastRequestedAt = 0;
 let gateRequestInFlight = false;
+let gateAutoVerifyInFlight = false;
+let gateLastAutoVerifyCode = '';
 let inventoryProducts = [];
 let shoppingItems = [];
 
@@ -392,16 +406,76 @@ function renderList(items) {
         const meta = store ? store : 'Indkøb';
         const hasPrice = item?.offer_price !== null && item?.offer_price !== undefined && !Number.isNaN(Number(item.offer_price));
         const price = hasPrice ? Number(item.offer_price).toFixed(2).replace('.', ',') + ' kr' : '';
-        return `<li class="item${checked ? ' checked' : ''}">
-            <button class="check" data-action="toggle" data-id="${id}" data-next="${checked ? '0' : '1'}">${checked ? 'OK' : '+'}</button>
-            <div class="item-main" data-action="toggle" data-id="${id}" data-next="${checked ? '0' : '1'}" role="button" tabindex="0" aria-label="Marker ${esc(displayName)} som købt">
+        return `<li class="item-shell${checked ? ' checked' : ''}" data-item-id="${id}">
+            <button class="swipe-delete" data-action="remove" data-id="${id}">Slet</button>
+            <div class="item-card item-main" data-action="toggle" data-id="${id}" data-next="${checked ? '0' : '1'}" role="button" tabindex="0" aria-label="Marker ${esc(displayName)} som købt">
                 <p class="name">${esc(displayName)}</p>
                 <p class="meta">${esc(meta)}</p>
                 ${price ? `<div class="price">${esc(price)}</div>` : ''}
             </div>
-            <button class="remove" data-action="remove" data-id="${id}">Slet</button>
         </li>`;
     }).join('');
+
+    bindShoppingSwipeRows();
+}
+
+function closeSwipedRows(exceptItemId = 0) {
+    document.querySelectorAll('#list .item-shell.swiped').forEach((row) => {
+        const rowId = Number(row.getAttribute('data-item-id') || 0);
+        if (!exceptItemId || rowId !== exceptItemId) {
+            row.classList.remove('swiped');
+        }
+    });
+}
+
+function bindShoppingSwipeRows() {
+    const list = document.getElementById('list');
+    if (!list) return;
+
+    list.querySelectorAll('.item-shell').forEach((row) => {
+        if (row.dataset.swipeBound === '1') return;
+        row.dataset.swipeBound = '1';
+
+        const track = row.querySelector('.item-card');
+        if (!(track instanceof HTMLElement)) return;
+
+        let startX = 0;
+        let startY = 0;
+        let deltaX = 0;
+        let isHorizontal = false;
+
+        track.addEventListener('touchstart', (event) => {
+            const touch = event.touches[0];
+            if (!touch) return;
+            startX = touch.clientX;
+            startY = touch.clientY;
+            deltaX = 0;
+            isHorizontal = false;
+            closeSwipedRows(Number(row.getAttribute('data-item-id') || 0));
+        }, {passive: true});
+
+        track.addEventListener('touchmove', (event) => {
+            const touch = event.touches[0];
+            if (!touch) return;
+            const moveX = touch.clientX - startX;
+            const moveY = touch.clientY - startY;
+            if (!isHorizontal) {
+                isHorizontal = Math.abs(moveX) > Math.abs(moveY) && Math.abs(moveX) > 10;
+            }
+            if (isHorizontal) {
+                deltaX = moveX;
+            }
+        }, {passive: true});
+
+        track.addEventListener('touchend', () => {
+            if (!isHorizontal) return;
+            if (deltaX <= -45) {
+                row.classList.add('swiped');
+            } else if (deltaX >= 30) {
+                row.classList.remove('swiped');
+            }
+        });
+    });
 }
 
 function renderSuggestions(rawQuery) {
@@ -632,6 +706,28 @@ gateCodeInput?.addEventListener('keydown', async (event) => {
     }
 });
 
+gateCodeInput?.addEventListener('input', async () => {
+    const raw = String(gateCodeInput.value || '');
+    const digits = raw.replace(/\D+/g, '').slice(0, 6);
+    gateCodeInput.value = digits;
+    if (digits.length !== 6 || !challengeId) {
+        return;
+    }
+    if (gateAutoVerifyInFlight || gateLastAutoVerifyCode === digits) {
+        return;
+    }
+
+    gateAutoVerifyInFlight = true;
+    gateLastAutoVerifyCode = digits;
+    try {
+        await verifyCode();
+    } catch (e) {
+        setStatus('gateStatus', 'Fejl ved login: ' + String(e?.message || e), true);
+    } finally {
+        gateAutoVerifyInFlight = false;
+    }
+});
+
 document.getElementById('logoutBtn')?.addEventListener('click', () => {
     logoutApp();
 });
@@ -714,6 +810,12 @@ document.getElementById('list')?.addEventListener('click', async (event) => {
     const action = actionEl.dataset.action || '';
     const id = Number(actionEl.dataset.id || 0);
     if (!id) return;
+
+    const row = actionEl.closest('.item-shell');
+    if (action === 'toggle' && row instanceof HTMLElement && row.classList.contains('swiped')) {
+        row.classList.remove('swiped');
+        return;
+    }
 
     try {
         if (action === 'toggle') {
