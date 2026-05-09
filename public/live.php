@@ -3550,6 +3550,53 @@ function findInventoryProductByBarcode(barcode) {
     return inventoryProductsCache.find((product) => String(product?.barcode || '').trim() === target) || null;
 }
 
+function parseScannerPayload(rawValue) {
+    const raw = String(rawValue || '').trim();
+    if (!raw) {
+        return {barcode: '', modeHint: null, normalizedRaw: ''};
+    }
+
+    const compact = raw.replace(/\s+/g, '');
+
+    const prefixedMode = compact.match(/^(out|ud|o|in|ind|i)[:;,_\-]?([0-9]{8,14})$/i);
+    if (prefixedMode) {
+        const modeToken = String(prefixedMode[1] || '').toLowerCase();
+        const modeHint = (modeToken === 'out' || modeToken === 'ud' || modeToken === 'o') ? 'out' : 'in';
+        return {
+            barcode: String(prefixedMode[2] || ''),
+            modeHint,
+            normalizedRaw: compact,
+        };
+    }
+
+    const signMode = compact.match(/^([+-])([0-9]{8,14})$/);
+    if (signMode) {
+        return {
+            barcode: String(signMode[2] || ''),
+            modeHint: signMode[1] === '-' ? 'out' : 'in',
+            normalizedRaw: compact,
+        };
+    }
+
+    const suffixMode = compact.match(/^([0-9]{8,14})[:;,_\-]?(out|ud|o|in|ind|i)$/i);
+    if (suffixMode) {
+        const modeToken = String(suffixMode[2] || '').toLowerCase();
+        const modeHint = (modeToken === 'out' || modeToken === 'ud' || modeToken === 'o') ? 'out' : 'in';
+        return {
+            barcode: String(suffixMode[1] || ''),
+            modeHint,
+            normalizedRaw: compact,
+        };
+    }
+
+    const digits = compact.match(/([0-9]{8,14})/);
+    return {
+        barcode: digits ? String(digits[1] || '') : compact,
+        modeHint: null,
+        normalizedRaw: compact,
+    };
+}
+
 function renderInventoryScanResult(html) {
     const box = document.getElementById('inventoryScanResult');
     if (!box) {
@@ -3590,15 +3637,27 @@ function openIngredientCreatePanel() {
 }
 
 async function handleScannedBarcode(barcode) {
-    const code = String(barcode || '').trim();
+    const parsed = parseScannerPayload(barcode);
+    const code = String(parsed.barcode || '').trim();
     if (code.length < 8) {
         return;
+    }
+
+    if (parsed.modeHint === 'in' || parsed.modeHint === 'out') {
+        inventoryScanMode = parsed.modeHint;
+        const modeInBtn = document.getElementById('scanModeIn');
+        const modeOutBtn = document.getElementById('scanModeOut');
+        if (modeInBtn && modeOutBtn) {
+            modeInBtn.classList.toggle('active', inventoryScanMode === 'in');
+            modeOutBtn.classList.toggle('active', inventoryScanMode === 'out');
+        }
+        appendInventoryScanDebug(`ESP32 retning registreret fra payload: ${inventoryScanMode}`);
     }
 
     lastScannedBarcode = code;
     lastScanLookupProduct = null;
 
-    setInventoryScanStatus(`Scanner: ${code}`);
+    setInventoryScanStatus(`Scanner: ${code}${parsed.modeHint ? ' (' + (parsed.modeHint === 'out' ? 'ud' : 'ind') + ')' : ''}`);
 
     const existing = findInventoryProductByBarcode(code);
     if (existing) {
@@ -4127,7 +4186,7 @@ function initBarcodeScannerCapture() {
             return;
         }
 
-        if (/^[0-9A-Za-z\-]$/.test(event.key)) {
+        if (/^[0-9A-Za-z\-:;,_+]$/.test(event.key)) {
             buffer += event.key;
             if (flushTimer) {
                 clearTimeout(flushTimer);
