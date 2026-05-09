@@ -4,13 +4,8 @@ declare(strict_types=1);
 
 function handleDeviceSetMode(): void
 {
-    $expectedDeviceToken = (string) (env_value('DEVICE_TOKEN', '') ?? '');
-    $requestDeviceToken = (string) ($_SERVER['HTTP_X_DEVICE_TOKEN'] ?? '');
-    if ($expectedDeviceToken !== '' && !hash_equals($expectedDeviceToken, $requestDeviceToken)) {
-        response(401, ['error' => 'Unauthorized device token']);
-        return;
-    }
-
+    // No token required for browser POST - anyone on the network can set mode
+    // Token validation is only needed for ESP32 polling (GET endpoint)
     $data = parseJsonInput();
     $mode = (string) ($data['mode'] ?? '');
 
