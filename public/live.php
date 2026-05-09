@@ -2754,12 +2754,37 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
             }
         }
 
-        // Strip brand prefix from product name for generic display
+        // Strip brand from product name using normalized word matching
         const rawName = String(item?.product_name || 'Ukendt vare');
         const brand = String(item?.brand || '').trim();
         let displayName = rawName;
-        if (brand && rawName.toLowerCase().startsWith(brand.toLowerCase())) {
-            displayName = rawName.slice(brand.length).trim();
+        if (brand) {
+            // Normalize: lowercase, split camelCase, remove punctuation, split to words
+            const normWords = (s) => s
+                .replace(/([a-z])([A-Z])/g, '$1 $2')   // camelCase → words
+                .toLowerCase()
+                .replace(/[^a-z0-9æøå\s]/g, ' ')
+                .split(/\s+/)
+                .filter(Boolean);
+            const brandWords = normWords(brand);
+            const nameWords = rawName.split(/\s+/);
+            // Remove leading words from name that match brand words (normalized)
+            let consumed = 0;
+            let bi = 0;
+            for (let ni = 0; ni < nameWords.length && bi < brandWords.length; ni++) {
+                const nw = normWords(nameWords[ni]);
+                if (nw.length === 1 && nw[0] === brandWords[bi]) {
+                    consumed = ni + 1;
+                    bi++;
+                } else if (nw.join('') === brandWords.slice(bi, bi + nw.length).join('')) {
+                    consumed = ni + 1;
+                    bi += nw.length;
+                } else {
+                    break;
+                }
+            }
+            const stripped = nameWords.slice(consumed).join(' ').trim();
+            if (stripped.length > 2) displayName = stripped;
         }
         if (!displayName) displayName = rawName;
 
