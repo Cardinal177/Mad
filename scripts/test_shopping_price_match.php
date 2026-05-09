@@ -30,8 +30,10 @@ try {
         exit(0);
     }
 
+    $hasOfferId = shoppingListItemsHasColumn($pdo, 'offer_id');
+    $offerIdSelect = $hasOfferId ? 'offer_id' : 'NULL AS offer_id';
     $stmt = $pdo->prepare(
-        'SELECT id, product_name, preferred_store, offer_price
+        'SELECT id, product_name, preferred_store, ' . $offerIdSelect . ', offer_price
          FROM shopping_list_items
          WHERE shopping_list_id = ?
          ORDER BY created_at DESC, id DESC
@@ -50,9 +52,10 @@ try {
         $itemId = (int) ($row['id'] ?? 0);
         $name = (string) ($row['product_name'] ?? '');
         $store = (string) ($row['preferred_store'] ?? '');
+        $storedOfferId = isset($row['offer_id']) && $row['offer_id'] !== null ? (int) $row['offer_id'] : null;
         $storedPrice = $row['offer_price'];
 
-        if ($storedPrice !== null) {
+        if ($storedPrice !== null || ($storedOfferId !== null && $storedOfferId > 0)) {
             $withStoredPrice++;
             continue;
         }
@@ -68,6 +71,7 @@ try {
                     'price' => (float) $match['offer_price'],
                     'offer_store' => (string) ($match['offer_store'] ?? ''),
                     'offer_title' => (string) ($match['offer_title'] ?? ''),
+                    'source' => (string) ($match['offer_source'] ?? 'fuzzy_fallback'),
                     'score' => (float) ($match['score'] ?? 0.0),
                 ];
             }
@@ -96,7 +100,7 @@ try {
         foreach ($resolvedExamples as $ex) {
             echo "- #{$ex['id']} {$ex['name']} [{$ex['store']}] => "
                 . number_format((float) $ex['price'], 2) . " kr"
-                . " (offer: {$ex['offer_title']} @ {$ex['offer_store']}, score "
+                . " (" . $ex['source'] . ", offer: {$ex['offer_title']} @ {$ex['offer_store']}, score "
                 . number_format((float) $ex['score'], 1) . ")\n";
         }
     }

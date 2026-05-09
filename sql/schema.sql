@@ -168,6 +168,7 @@ CREATE TABLE IF NOT EXISTS shopping_list_items (
   unit VARCHAR(40) DEFAULT NULL,
   preferred_store VARCHAR(120) DEFAULT NULL,
   product_category VARCHAR(120) DEFAULT NULL,
+  offer_id BIGINT UNSIGNED DEFAULT NULL,
   is_checked TINYINT(1) NOT NULL DEFAULT 0,
   offer_price DECIMAL(10,2) DEFAULT NULL,
   offer_valid_until DATE DEFAULT NULL,
@@ -178,7 +179,8 @@ CREATE TABLE IF NOT EXISTS shopping_list_items (
   CONSTRAINT fk_shopping_items_product
     FOREIGN KEY (product_id) REFERENCES products(id)
     ON DELETE SET NULL,
-  INDEX idx_shopping_items_store_category (preferred_store, product_category)
+  INDEX idx_shopping_items_store_category (preferred_store, product_category),
+  INDEX idx_shopping_items_offer (offer_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS store_offers (
