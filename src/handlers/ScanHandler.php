@@ -537,10 +537,16 @@ function handleScan(PDO $pdo): void
         $inventory = $stmt->fetch();
         $autoAddedToShoppingList = false;
         $autoRemovedFromShoppingList = false;
+        $preventedNegative = false;
 
         $quantityAfter = null;
         if ($inventory) {
-            $newQuantity = (float) $inventory['quantity'] + $quantityDelta;
+            $currentQuantity = (float) ($inventory['quantity'] ?? 0);
+            $newQuantity = $currentQuantity + $quantityDelta;
+            if ($newQuantity < 0) {
+                $newQuantity = 0.0;
+                $preventedNegative = true;
+            }
             $stmt = $pdo->prepare('UPDATE household_inventory SET quantity = ? WHERE id = ?');
             $stmt->execute([$newQuantity, (int) $inventory['id']]);
             $quantityAfter = $newQuantity;
@@ -556,8 +562,12 @@ function handleScan(PDO $pdo): void
                 'INSERT INTO household_inventory (household_id, location_id, product_id, quantity)
                  VALUES (?, ?, ?, ?)'
             );
-            $stmt->execute([$householdId, $locationId, $productId, $quantityDelta]);
-            $quantityAfter = $quantityDelta;
+            $initialQuantity = $quantityDelta < 0 ? 0.0 : $quantityDelta;
+            if ($quantityDelta < 0) {
+                $preventedNegative = true;
+            }
+            $stmt->execute([$householdId, $locationId, $productId, $initialQuantity]);
+            $quantityAfter = $initialQuantity;
         }
 
         $pdo->commit();
@@ -575,6 +585,7 @@ function handleScan(PDO $pdo): void
             'quantity_delta' => $quantityDelta,
             'auto_added_to_shopping_list' => $autoAddedToShoppingList,
             'auto_removed_from_shopping_list' => $autoRemovedFromShoppingList,
+            'prevented_negative' => $preventedNegative,
             'household_id' => $householdId,
             'location_id' => $locationId,
         ]);
