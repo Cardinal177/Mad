@@ -1870,6 +1870,12 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                 
                 <div class="shopping-top-bar">
                     <div class="search-container">
+                        <div style="display:flex; gap:6px; margin-bottom:8px;">
+                            <input type="text" id="freeTextShoppingInput" placeholder="Skriv hvad du vil købe (fx Faxe Kondi)..." autocomplete="off" style="flex:1; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-family: inherit; font-size: inherit;" />
+                            <button id="freeTextShoppingAdd" style="padding: 8px 14px; border-radius: 12px; border: 1px solid var(--accent); background: rgba(47,106,86,0.1); color: var(--accent); font-weight: 700; font-size: 13px; cursor: pointer;">+ Tilføj</button>
+                        </div>
+                    </div>
+                    <div class="search-container">
                         <input type="text" id="inventoryShoppingSearch" placeholder="Tilføj fra lager (skriv produktnavn)..." style="padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-family: inherit; font-size: inherit; width: 100%;" />
                         <div id="inventoryShoppingSuggestions" style="display:none; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.95); position: absolute; top: 100%; left: 0; right: 0; z-index: 11; margin-top: 4px;"></div>
                     </div>
@@ -2949,6 +2955,39 @@ function initShoppingListActions() {
                 actionTarget.classList.remove('is-busy');
             }
         }
+    });
+}
+
+function initFreeTextShoppingAdd() {
+    const input = document.getElementById('freeTextShoppingInput');
+    const btn = document.getElementById('freeTextShoppingAdd');
+    if (!input || !btn || input.dataset.freeTextBound === '1') return;
+    input.dataset.freeTextBound = '1';
+
+    async function addFreeText() {
+        const name = input.value.trim();
+        if (!name) return;
+        btn.disabled = true;
+        input.disabled = true;
+        try {
+            const targetHouseholdId = Number(householdId || 0) > 0 ? String(householdId) : '1';
+            await postJson(`api.php?endpoint=shopping.list.add_items&household_id=${encodeURIComponent(targetHouseholdId)}`, {
+                items: [{ title: name }],
+            });
+            input.value = '';
+            await refresh();
+        } catch (e) {
+            alert('Kunne ikke tilføje: ' + String(e?.message || e));
+        } finally {
+            btn.disabled = false;
+            input.disabled = false;
+            input.focus();
+        }
+    }
+
+    btn.addEventListener('click', addFreeText);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); addFreeText(); }
     });
 }
 
@@ -5149,6 +5188,7 @@ async function refresh() {
         initInventoryCardActions();
         initInventoryShoppingSearch();
         initInventoryScanActions();
+        initFreeTextShoppingAdd();
         if (shoppingListItems.length > 0) {
             renderShoppingList(shoppingListItems, shoppingList.list || null, shopping.items || []);
         } else {
@@ -5231,6 +5271,7 @@ initBarcodeScannerCapture();
 initInventoryScanActions();
 initShoppingListActions();
 initShoppingListKeyboardActions();
+initFreeTextShoppingAdd();
 applyTraditionalPage(<?= json_encode($currentPage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
 updateNavFromHash();
 initAuthGate();
