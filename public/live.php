@@ -704,6 +704,59 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             font-weight: 700;
             cursor: pointer;
         }
+        .inventory-scan-box {
+            margin: 0 0 12px;
+            padding: 12px;
+            border: 1px dashed var(--line);
+            border-radius: 14px;
+            background: rgba(255,252,247,0.9);
+        }
+        .inventory-scan-title {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--ink);
+        }
+        .inventory-scan-copy {
+            margin: 4px 0 0;
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.4;
+        }
+        .inventory-scan-status {
+            margin-top: 10px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+        .inventory-scan-status.err {
+            color: var(--berry);
+        }
+        .inventory-scan-result {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(20,35,29,0.08);
+            display: grid;
+            gap: 8px;
+        }
+        .inventory-scan-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .scan-action {
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink);
+            border-radius: 10px;
+            padding: 7px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .scan-action.primary {
+            background: rgba(47,106,86,0.12);
+            color: var(--accent);
+        }
         .scan-type {
             display: inline-flex;
             align-items: center;
@@ -1602,6 +1655,12 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                     </div>
                     <div class="chip" id="inventoryChip">0 i balance</div>
                 </div>
+                <div class="inventory-scan-box" id="inventoryScanBox">
+                    <h3 class="inventory-scan-title">Scan på Lager-siden</h3>
+                    <p class="inventory-scan-copy">Du kan blive stående her og scanne. Vi viser med det samme om varen allerede er oprettet, eller om du vil oprette den.</p>
+                    <div class="inventory-scan-status" id="inventoryScanStatus">Venter på scanning...</div>
+                    <div class="inventory-scan-result" id="inventoryScanResult" style="display:none;"></div>
+                </div>
                 <details class="planner-card ingredient-create-panel" style="margin-bottom:12px;" id="ingredientCreateDetails">
                     <summary style="cursor:pointer; font-weight:700; font-size:16px; list-style:none; display:flex; justify-content:space-between; align-items:center;">
                         <span>Ny ingrediens</span>
@@ -1934,6 +1993,8 @@ let gateSending = false;
 let gateVerifying = false;
 let gateLastInitials = '';
 let inventoryProductsCache = [];
+let lastScannedBarcode = '';
+let lastScanLookupProduct = null;
 
 if (params.get('device_token')) {
     window.localStorage.setItem('madDeviceToken', params.get('device_token'));
@@ -3372,6 +3433,171 @@ function setIngredientStatus(message, isError = false) {
     el.classList.toggle('err', !!isError);
 }
 
+function setInventoryScanStatus(message, isError = false) {
+    const el = document.getElementById('inventoryScanStatus');
+    if (!el) {
+        return;
+    }
+    el.textContent = message;
+    el.classList.toggle('err', !!isError);
+}
+
+function findInventoryProductByBarcode(barcode) {
+    const target = String(barcode || '').trim();
+    if (!target) {
+        return null;
+    }
+    return inventoryProductsCache.find((product) => String(product?.barcode || '').trim() === target) || null;
+}
+
+function renderInventoryScanResult(html) {
+    const box = document.getElementById('inventoryScanResult');
+    if (!box) {
+        return;
+    }
+
+    if (!html) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        return;
+    }
+
+    box.innerHTML = html;
+    box.style.display = '';
+}
+
+async function lookupIngredientProduct(barcode) {
+    return await loadJson(`api.php?endpoint=ingredients.lookup&household_id=${encodeURIComponent(householdId)}&barcode=${encodeURIComponent(barcode)}`);
+}
+
+function fillIngredientFieldsForBarcode(barcode, product = null) {
+    const barcodeInput = document.getElementById('ingredientBarcode');
+    if (barcodeInput) {
+        barcodeInput.value = String(barcode || '');
+        barcodeInput.dispatchEvent(new Event('input', {bubbles: true}));
+        barcodeInput.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+    if (product) {
+        fillIngredientFieldsFromLookup(product);
+    }
+}
+
+function openIngredientCreatePanel() {
+    const panel = document.getElementById('ingredientCreateDetails');
+    if (panel instanceof HTMLElement && panel.tagName.toLowerCase() === 'details') {
+        panel.setAttribute('open', 'open');
+    }
+}
+
+async function handleScannedBarcode(barcode) {
+    const code = String(barcode || '').trim();
+    if (code.length < 8) {
+        return;
+    }
+
+    lastScannedBarcode = code;
+    lastScanLookupProduct = null;
+
+    setInventoryScanStatus(`Scanner: ${code}`);
+
+    const existing = findInventoryProductByBarcode(code);
+    if (existing) {
+        renderInventoryScanResult(`
+            <div>
+                <strong>Varen findes allerede:</strong> ${esc(existing.name || 'Ukendt vare')}
+                <div class="inventory-scan-copy">Barcode ${esc(code)} findes i lageret.</div>
+            </div>
+            <div class="inventory-scan-actions">
+                <button type="button" class="scan-action primary" data-scan-action="add-shopping" data-product-id="${esc(String(existing.id || ''))}" data-product-name="${esc(existing.name || '')}" data-store="${esc(existing.offer_store || existing.standard_store || '')}">Tilføj til indkøbsliste</button>
+                <button type="button" class="scan-action" data-scan-action="open-create" data-barcode="${esc(code)}">Se/Opret detaljer</button>
+            </div>
+        `);
+        setInventoryScanStatus('Fundet i lager. Du kan tilføje til indkøbsliste med det samme.');
+        return;
+    }
+
+    setInventoryScanStatus('Ikke fundet i lager. Slår op i API...');
+
+    try {
+        const payload = await lookupIngredientProduct(code);
+        const product = payload?.product || null;
+        lastScanLookupProduct = product;
+
+        if (product) {
+            renderInventoryScanResult(`
+                <div>
+                    <strong>Ikke oprettet endnu:</strong> ${esc(product.name || 'Ukendt vare')}
+                    <div class="inventory-scan-copy">Barcode ${esc(code)} blev fundet i opslag. Du kan oprette varen nu.</div>
+                </div>
+                <div class="inventory-scan-actions">
+                    <button type="button" class="scan-action primary" data-scan-action="open-create" data-barcode="${esc(code)}">Opret vare fra scanning</button>
+                </div>
+            `);
+            setInventoryScanStatus('Opslag ok. Varen er klar til oprettelse.');
+            return;
+        }
+    } catch (_e) {
+        // handled below with generic message
+    }
+
+    renderInventoryScanResult(`
+        <div>
+            <strong>Ingen opslag fundet</strong>
+            <div class="inventory-scan-copy">Barcode ${esc(code)} blev ikke fundet i lookup-kilden.</div>
+        </div>
+        <div class="inventory-scan-actions">
+            <button type="button" class="scan-action primary" data-scan-action="open-create" data-barcode="${esc(code)}">Opret manuelt med barcode</button>
+        </div>
+    `);
+    setInventoryScanStatus('Ikke fundet i lager eller opslag. Du kan oprette manuelt.', true);
+}
+
+function initInventoryScanActions() {
+    const result = document.getElementById('inventoryScanResult');
+    if (!result || result.dataset.scanActionsBound === '1') {
+        return;
+    }
+    result.dataset.scanActionsBound = '1';
+
+    result.addEventListener('click', async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+            return;
+        }
+
+        const actionEl = target.closest('[data-scan-action]');
+        if (!(actionEl instanceof HTMLElement)) {
+            return;
+        }
+
+        const action = String(actionEl.dataset.scanAction || '');
+        if (action === 'open-create') {
+            const barcode = String(actionEl.dataset.barcode || lastScannedBarcode || '').trim();
+            openIngredientCreatePanel();
+            fillIngredientFieldsForBarcode(barcode, lastScanLookupProduct);
+            setIngredientStatus('Scan klar i formularen. Tjek felter og tryk Opret ingrediens.');
+            return;
+        }
+
+        if (action === 'add-shopping') {
+            const productId = Number(actionEl.dataset.productId || 0);
+            const productName = String(actionEl.dataset.productName || '').trim();
+            const store = String(actionEl.dataset.store || '').trim();
+            if (!productName) {
+                return;
+            }
+
+            try {
+                await addInventoryProductToShopping({id: productId, name: productName, offer_store: store});
+                setInventoryScanStatus('Varen er tilføjet til indkøbslisten.');
+                await refresh();
+            } catch (e) {
+                setInventoryScanStatus('Kunne ikke tilføje til indkøbslisten: ' + String(e?.message || e), true);
+            }
+        }
+    });
+}
+
 function ingredientFormValues() {
     return {
         name: document.getElementById('ingredientName')?.value.trim() || '',
@@ -3573,24 +3799,10 @@ function initBarcodeScannerCapture() {
             return;
         }
 
-        const barcodeInput = document.getElementById('ingredientBarcode');
-        if (!(barcodeInput instanceof HTMLInputElement)) {
-            return;
-        }
-
-        const panel = document.getElementById('ingredientCreateDetails');
-        if (panel instanceof HTMLElement && panel.tagName.toLowerCase() === 'details') {
-            panel.setAttribute('open', 'open');
-        }
-
-        barcodeInput.value = code;
-        barcodeInput.dispatchEvent(new Event('input', {bubbles: true}));
-        barcodeInput.dispatchEvent(new Event('change', {bubbles: true}));
-
         try {
-            await lookupIngredientFromBarcode();
+            await handleScannedBarcode(code);
         } catch (_e) {
-            // lookupIngredientFromBarcode already handles user-facing status
+            setInventoryScanStatus('Scan blev fanget, men kunne ikke behandles.', true);
         }
     };
 
@@ -3990,6 +4202,7 @@ async function refresh() {
         renderProducts(productList);
         initInventoryCardActions();
         initInventoryShoppingSearch();
+        initInventoryScanActions();
         if (shoppingListItems.length > 0) {
             renderShoppingList(shoppingListItems, shoppingList.list || null, shopping.items || []);
         } else {
@@ -4028,6 +4241,7 @@ async function refresh() {
         document.getElementById('latestMovementMeta').textContent = latest
             ? `${latest.product_name || 'Ukendt vare'} er senest registreret og kan senere indgå direkte i madplan og indkøb for husstanden.`
             : 'Når nye fødevarer kommer ind, bliver kortene automatisk beriget her.';
+        setInventoryScanStatus('Venter på scanning...');
         syncStatus.textContent = 'Synkroniseret ' + new Date().toLocaleTimeString('da-DK', {hour: '2-digit', minute: '2-digit'});
     } catch (e) {
         document.getElementById('scansBody').innerHTML = '<div class="empty">Fejl ved indlæsning af scannerflow.</div>';
@@ -4044,6 +4258,7 @@ async function refresh() {
         if (leafletOffersBody) {
             leafletOffersBody.innerHTML = '<div class="empty">Fejl ved indlæsning af tilbudsavis-liste.</div>';
         }
+        setInventoryScanStatus('Data kunne ikke opdateres lige nu.', true);
 
         const reason = formatConnectionError(e);
         if (/HTTP\s+401/i.test(reason)) {
@@ -4067,6 +4282,7 @@ window.addEventListener('hashchange', updateNavFromHash);
 initAdminConsole();
 initIngredientTools();
 initBarcodeScannerCapture();
+initInventoryScanActions();
 initShoppingListActions();
 initShoppingListKeyboardActions();
 applyTraditionalPage(<?= json_encode($currentPage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
