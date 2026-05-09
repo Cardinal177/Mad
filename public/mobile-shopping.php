@@ -74,16 +74,38 @@ declare(strict_types=1);
             padding: 10px;
             background: #fff;
         }
-        .item.checked { opacity: 0.6; }
+        .item.checked {
+            background: #f5f6f5;
+            border-color: #d8dfdb;
+        }
+        .item.checked .name,
+        .item.checked .meta,
+        .item.checked .price {
+            color: #8a938e;
+        }
+        .item.checked .name {
+            text-decoration: line-through;
+            text-decoration-thickness: 1.5px;
+        }
         .item-main { cursor: pointer; }
         .check {
             width: 34px;
             height: 34px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
             border-radius: 10px;
             border: 1px solid var(--accent);
             color: var(--accent);
             font-weight: 700;
             background: rgba(47,106,86,0.1);
+        }
+        .item.checked .check {
+            border-color: #8fb3a4;
+            color: #7aa391;
+            background: rgba(143,179,164,0.16);
         }
         .name { margin: 0; font-size: 15px; font-weight: 700; }
         .meta { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
