@@ -2525,7 +2525,7 @@ function renderProducts(products) {
             : '';
         const weightValue = Number(product.weight_grams ?? 0);
         const hasWeight = Number.isFinite(weightValue) && weightValue > 0;
-        return `<article class="inventory-card" data-product-id="${esc(String(product.id || ''))}" data-location-id="${esc(String(product.location_id || ''))}">
+        return `<article class="inventory-card" data-product-id="${esc(String(product.id || ''))}" data-location-id="${esc(String(product.location_id || ''))}" data-barcode="${esc(String(product.barcode || ''))}">
             <div class="inventory-visual">
                 ${image}
                 <div>
@@ -3644,6 +3644,7 @@ async function pollInventoryLastScanFromServer() {
             : Number(scan.quantity_after);
         const scanHouseholdId = Number(scan.household_id || 0);
         const scanLocationId = Number(scan.location_id || 0);
+        const uiHouseholdId = Number(householdId || 0);
         if (!code) {
             return;
         }
@@ -3672,7 +3673,11 @@ async function pollInventoryLastScanFromServer() {
                 return product;
             });
 
-            const productCards = document.querySelectorAll(`#productsBody .inventory-card[data-product-id="${scanProductId}"]`);
+            let productCards = document.querySelectorAll(`#productsBody .inventory-card[data-product-id="${scanProductId}"]`);
+            if (!productCards.length && code) {
+                const escapedCode = String(code).replace(/"/g, '\\"');
+                productCards = document.querySelectorAll(`#productsBody .inventory-card[data-barcode="${escapedCode}"]`);
+            }
             productCards.forEach((card) => {
                 if (!(card instanceof HTMLElement)) {
                     return;
@@ -3696,11 +3701,9 @@ async function pollInventoryLastScanFromServer() {
 
         const movementLabel = movement === 'out' ? 'ud' : 'ind';
         setInventoryScanStatus(`Scanner (ESP32): ${code} (${movementLabel})`);
-        appendInventoryScanDebug(`ESP32 scan modtaget: ${code} (${movementLabel}) product=${scanProductId || '-'} hh=${scanHouseholdId || '-'} loc=${scanLocationId || '-'} qty=${scanQuantityAfter ?? '-'}`);
+        appendInventoryScanDebug(`ESP32 scan modtaget: ${code} (${movementLabel}) product=${scanProductId || '-'} hh=${scanHouseholdId || '-'} loc=${scanLocationId || '-'} ui_hh=${uiHouseholdId || '-'} qty=${scanQuantityAfter ?? '-'}`);
 
-        if (accessToken) {
-            void refresh();
-        }
+        void refresh();
     } catch (e) {
         // Ignore temporary polling/network errors.
     }
