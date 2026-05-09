@@ -678,8 +678,32 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
         .inventory-card-actions {
             margin-top: 6px;
             display: flex;
+            flex-wrap: wrap;
+            align-items: center;
             justify-content: flex-end;
             gap: 6px;
+        }
+        .inventory-basis-toggle {
+            margin-right: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            background: rgba(47, 106, 86, 0.08);
+            color: var(--accent);
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            user-select: none;
+        }
+        .inventory-basis-toggle input {
+            margin: 0;
+            width: 14px;
+            height: 14px;
+            accent-color: var(--accent);
+            cursor: pointer;
         }
         .inventory-add-shopping {
             border: 1px solid var(--line);
@@ -2655,6 +2679,13 @@ function renderProducts(products) {
                 </div>
             </div>
             <div class="inventory-card-actions">
+                <label class="inventory-basis-toggle" title="Basisvare tilføjes automatisk til indkøb ved lav beholdning">
+                    <input type="checkbox"
+                        data-product-action="toggle-basis"
+                        data-product-id="${esc(String(product.id || ''))}"
+                        ${isBasis ? 'checked' : ''}>
+                    <span>Basisvare</span>
+                </label>
                 <button class="inventory-add-shopping"
                     data-product-action="edit-ingredient"
                     data-product-id="${esc(String(product.id || ''))}">Rediger</button>
@@ -3537,6 +3568,59 @@ function initInventoryCardActions() {
         } catch (e) {
             alert('Kunne ikke tilføje til indkøbsliste: ' + String(e?.message || e));
             button.disabled = false;
+        }
+    });
+
+    body.addEventListener('change', async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement)) {
+            return;
+        }
+
+        if (String(target.dataset.productAction || '') !== 'toggle-basis') {
+            return;
+        }
+
+        const productId = Number(target.dataset.productId || 0);
+        if (productId <= 0) {
+            return;
+        }
+
+        const product = (Array.isArray(inventoryProductsCache) ? inventoryProductsCache : []).find((item) => Number(item?.id || 0) === productId);
+        if (!product) {
+            target.checked = !target.checked;
+            alert('Kunne ikke finde produktdata. Opdater siden og prøv igen.');
+            return;
+        }
+
+        const isBasis = !!target.checked;
+        target.disabled = true;
+        try {
+            await postJson(`api.php?endpoint=inventory.update_item&household_id=${encodeURIComponent(householdId)}`, {
+                product_id: productId,
+                location_id: Number(product.location_id || 0),
+                quantity: Number(product.quantity ?? 0),
+                minimum_quantity: Number(product.minimum_quantity ?? 0),
+                is_basis: isBasis,
+            });
+
+            inventoryProductsCache = (Array.isArray(inventoryProductsCache) ? inventoryProductsCache : []).map((item) => {
+                if (Number(item?.id || 0) !== productId) {
+                    return item;
+                }
+                return {
+                    ...item,
+                    is_basis: isBasis ? 1 : 0,
+                };
+            });
+
+            renderProducts(inventoryProductsCache);
+            initInventoryCardActions();
+        } catch (e) {
+            target.checked = !isBasis;
+            alert('Kunne ikke opdatere basisvare: ' + String(e?.message || e));
+        } finally {
+            target.disabled = false;
         }
     });
 }

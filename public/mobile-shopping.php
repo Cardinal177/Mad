@@ -142,10 +142,10 @@ declare(strict_types=1);
             grid-template-columns: 1fr;
             gap: 10px;
             align-items: center;
-            border: 1px solid var(--line);
+            border: 2px solid #d8cbb4;
             border-radius: 12px;
             padding: 10px;
-            background: #fff;
+            background: #f3ebdd;
             transition: transform 0.18s ease;
             position: relative;
             z-index: 2;
@@ -153,10 +153,11 @@ declare(strict_types=1);
             -webkit-user-select: none;
             user-select: none;
             -webkit-touch-callout: none;
+            box-shadow: 0 1px 0 rgba(28,41,33,0.04);
         }
         .item-shell.checked .item-card {
             background: #f5f6f5;
-            border-color: #d8dfdb;
+            border-color: #c8d0cb;
         }
         .item-shell.checked .name,
         .item-shell.checked .meta,
@@ -199,6 +200,8 @@ declare(strict_types=1);
             display: inline-flex;
             align-items: center;
             gap: 8px;
+            justify-self: start;
+            width: fit-content;
             border-radius: 999px;
             border: 1px solid var(--line);
             padding: 6px 10px;

@@ -96,7 +96,7 @@ declare(strict_types=1);
         }
         .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
         .item {
-            border: 1px solid var(--line);
+            border: 2px solid #d8cbb4;
             border-radius: 12px;
             padding: 0;
             background: #fff;
@@ -106,10 +106,11 @@ declare(strict_types=1);
             user-select: none;
             -webkit-touch-callout: none;
             touch-action: manipulation;
+            box-shadow: 0 1px 0 rgba(28,41,33,0.04);
         }
         .item-main {
             padding: 10px;
-            background: #fff;
+            background: #f3ebdd;
             display: grid;
             grid-template-columns: 1fr auto;
             gap: 8px;
