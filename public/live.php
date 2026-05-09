@@ -2071,6 +2071,7 @@ let inventoryScanDebugLines = [];
 let inventoryLastProcessedScan = {signature: '', at: 0};
 let inventoryLastServerScanTimestamp = 0;
 let ingredientEditingProductId = 0;
+let inventoryLastContextPushAt = 0;
 
 if (params.get('device_token')) {
     window.localStorage.setItem('madDeviceToken', params.get('device_token'));
@@ -3596,14 +3597,31 @@ function setInventoryScanMode(mode, source = '') {
 
     // Notify backend if mode was changed by user click (for ESP32 feedback)
     if (source === 'klik') {
-        const selectedLocationId = Number(document.getElementById('ingredientLocationId')?.value || 0) || 1;
-        void postJson('api.php?endpoint=device.set_mode', {
-            mode: inventoryScanMode,
-            household_id: Number(householdId || 1),
-            location_id: selectedLocationId,
-        }, {includeDeviceToken: true}).catch(err => {
-            appendInventoryScanDebug(`Advarsel: kunne ikke updatere ESP32 mode: ${String(err?.message || err)}`);
-        });
+        void syncDeviceScanContext();
+    }
+}
+
+function getActiveInventoryLocationId() {
+    return Number(document.getElementById('ingredientLocationId')?.value || 0) || 1;
+}
+
+async function syncDeviceScanContext(force = false) {
+    const now = Date.now();
+    if (!force && (now - Number(inventoryLastContextPushAt || 0)) < 4000) {
+        return;
+    }
+
+    inventoryLastContextPushAt = now;
+    const contextPayload = {
+        mode: inventoryScanMode,
+        household_id: Number(householdId || 1),
+        location_id: getActiveInventoryLocationId(),
+    };
+
+    try {
+        await postJson('api.php?endpoint=device.set_mode', contextPayload, {includeDeviceToken: true});
+    } catch (err) {
+        appendInventoryScanDebug(`Advarsel: kunne ikke synke scan-kontekst: ${String(err?.message || err)}`);
     }
 }
 
@@ -4531,6 +4549,14 @@ function initIngredientTools() {
             }
         });
     }
+
+    const locationSelect = document.getElementById('ingredientLocationId');
+    if (locationSelect && locationSelect.dataset.scanContextBound !== '1') {
+        locationSelect.dataset.scanContextBound = '1';
+        locationSelect.addEventListener('change', () => {
+            void syncDeviceScanContext(true);
+        });
+    }
 }
 
 function initBarcodeScannerCapture() {
@@ -5100,6 +5126,10 @@ console.log('[Init] Started mode polling interval:', pollModeInterval);
 pollInventoryModeFromServer();  // Initial poll
 setInterval(pollInventoryLastScanFromServer, 700);
 pollInventoryLastScanFromServer();
+void syncDeviceScanContext(true);
+setInterval(() => {
+    void syncDeviceScanContext(false);
+}, 10000);
 </script>
 </body>
 </html>
