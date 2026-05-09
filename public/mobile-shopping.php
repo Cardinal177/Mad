@@ -159,6 +159,9 @@ declare(strict_types=1);
         .auth-card h2 { margin: 0 0 6px; font-size: 18px; }
         .auth-card p { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
         .auth-grid { display: grid; gap: 8px; }
+        .auth-grid input {
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -206,8 +209,11 @@ declare(strict_types=1);
 
 <script>
 const params = new URLSearchParams(window.location.search);
-// Mobile pages always require a fresh 2FA verification.
-let accessToken = '';
+const queryAccessToken = params.get('access_token') || '';
+if (queryAccessToken) {
+    window.localStorage.setItem('madAccessToken', queryAccessToken);
+}
+let accessToken = queryAccessToken || window.localStorage.getItem('madAccessToken') || '';
 let householdId = Number(params.get('household_id') || 0) || 0;
 let challengeId = '';
 let inventoryProducts = [];
@@ -488,6 +494,7 @@ async function verifyCode() {
     if (!accessToken) {
         throw new Error('Mangler adgangstoken');
     }
+    window.localStorage.setItem('madAccessToken', accessToken);
     const targetHousehold = Number(payload?.active_household_id || 0);
     if (targetHousehold > 0 && (!householdId || householdId <= 0)) {
         householdId = targetHousehold;
