@@ -683,6 +683,14 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             opacity: 0.6;
             cursor: wait;
         }
+        .inventory-btn-delete {
+            background: rgba(180, 40, 40, 0.08);
+            color: #c0392b;
+            border-color: rgba(180, 40, 40, 0.25);
+        }
+        .inventory-btn-delete:hover {
+            background: rgba(180, 40, 40, 0.18);
+        }
         .inventory-suggestion-row {
             display: grid;
             grid-template-columns: 1fr auto;
@@ -2599,6 +2607,10 @@ function renderProducts(products) {
                     data-product-id="${esc(String(product.id || ''))}"
                     data-product-name="${esc(product.name || 'Ukendt vare')}"
                     data-store="${esc(product.offer_store || product.standard_store || '')}">+ Indkøbsliste</button>
+                <button class="inventory-add-shopping inventory-btn-delete"
+                    data-product-action="delete-inventory"
+                    data-product-id="${esc(String(product.id || ''))}"
+                    data-product-name="${esc(displayName)}">Slet</button>
             </div>
         </article>`;
     }).join('');
@@ -3366,6 +3378,22 @@ function initInventoryCardActions() {
 
             openIngredientCreatePanel();
             startIngredientEditFromProduct(product);
+            return;
+        }
+
+        if (action === 'delete-inventory') {
+            const productId = Number(button.dataset.productId || 0);
+            const productName = String(button.dataset.productName || 'denne vare').trim();
+            if (productId <= 0) return;
+            if (!confirm(`Slet "${productName}" fra lageret?`)) return;
+            button.disabled = true;
+            try {
+                await postJson(`api.php?endpoint=inventory.delete&household_id=${encodeURIComponent(householdId)}`, { product_id: productId });
+                await refresh();
+            } catch (e) {
+                alert('Kunne ikke slette varen: ' + String(e?.message || e));
+                button.disabled = false;
+            }
             return;
         }
 

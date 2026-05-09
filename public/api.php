@@ -81,6 +81,11 @@ try {
         exit;
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'inventory.delete') {
+        handleInventoryDelete($pdo);
+        exit;
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'auth.request_code') {
         handleAuthRequestCode($pdo);
         exit;

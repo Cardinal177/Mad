@@ -1795,24 +1795,35 @@ function handleShoppingListRemoveItem(PDO $pdo): void
     }
 
     try {
-        $stmt = $pdo->prepare(
-            'DELETE si FROM shopping_list_items si
-             INNER JOIN shopping_lists sl ON sl.id = si.shopping_list_id
-             WHERE si.id = ?
-               AND sl.household_id = ?
-               AND sl.status IN ("open", "in_progress")'
-        );
-        $stmt->execute([$itemId, $householdId]);
+                'message' => $e->getMessage(),
+        ]);
+    }
+}
 
-        if ($stmt->rowCount() < 1) {
-            response(404, ['error' => 'Shopping list item not found']);
-            return;
-        }
+function handleInventoryDelete(PDO $pdo): void
+{
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    $data = parseJsonInput();
+    $productId = (int) ($data['product_id'] ?? 0);
+
+    if ($productId <= 0) {
+        response(400, ['error' => 'Missing or invalid product_id']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            'DELETE FROM household_inventory WHERE household_id = ? AND product_id = ?'
+        );
+        $stmt->execute([$householdId, $productId]);
 
         response(200, [
             'status' => 'ok',
-            'item_id' => $itemId,
-            'removed' => true,
+            'product_id' => $productId,
+            'deleted' => true,
         ]);
     } catch (Throwable $e) {
         response(500, [
@@ -1821,3 +1832,4 @@ function handleShoppingListRemoveItem(PDO $pdo): void
         ]);
     }
 }
+
