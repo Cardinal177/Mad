@@ -3542,6 +3542,38 @@ function appendInventoryScanDebug(message) {
     el.scrollTop = el.scrollHeight;
 }
 
+function setInventoryScanMode(mode, source = '') {
+    inventoryScanMode = mode === 'out' ? 'out' : 'in';
+    const modeInBtn = document.getElementById('scanModeIn');
+    const modeOutBtn = document.getElementById('scanModeOut');
+    if (modeInBtn && modeOutBtn) {
+        modeInBtn.classList.toggle('active', inventoryScanMode === 'in');
+        modeOutBtn.classList.toggle('active', inventoryScanMode === 'out');
+    }
+
+    const label = inventoryScanMode === 'out' ? 'ud af lager' : 'ind i lager';
+    setInventoryScanStatus(`Venter på scanning... Retning: ${label}`);
+    if (source) {
+        appendInventoryScanDebug(`Retning sat til ${inventoryScanMode} (${source})`);
+    }
+}
+
+function parseScannerModeCommand(rawValue) {
+    const token = String(rawValue || '').trim().toLowerCase();
+    if (!token) {
+        return null;
+    }
+
+    if (['in', 'ind', 'i', '+', 'up', 'op'].includes(token)) {
+        return 'in';
+    }
+    if (['out', 'ud', 'o', '-', 'down', 'ned'].includes(token)) {
+        return 'out';
+    }
+
+    return null;
+}
+
 function findInventoryProductByBarcode(barcode) {
     const target = String(barcode || '').trim();
     if (!target) {
@@ -3644,14 +3676,7 @@ async function handleScannedBarcode(barcode) {
     }
 
     if (parsed.modeHint === 'in' || parsed.modeHint === 'out') {
-        inventoryScanMode = parsed.modeHint;
-        const modeInBtn = document.getElementById('scanModeIn');
-        const modeOutBtn = document.getElementById('scanModeOut');
-        if (modeInBtn && modeOutBtn) {
-            modeInBtn.classList.toggle('active', inventoryScanMode === 'in');
-            modeOutBtn.classList.toggle('active', inventoryScanMode === 'out');
-        }
-        appendInventoryScanDebug(`ESP32 retning registreret fra payload: ${inventoryScanMode}`);
+        setInventoryScanMode(parsed.modeHint, 'scanner payload');
     }
 
     lastScannedBarcode = code;
@@ -3737,13 +3762,7 @@ function initInventoryScanActions() {
         await handleScannedBarcode(code);
     };
 
-    const setMode = (mode) => {
-        inventoryScanMode = mode === 'out' ? 'out' : 'in';
-        modeInBtn.classList.toggle('active', inventoryScanMode === 'in');
-        modeOutBtn.classList.toggle('active', inventoryScanMode === 'out');
-        setInventoryScanStatus(`Venter på scanning... Retning: ${inventoryScanMode === 'out' ? 'ud af lager' : 'ind i lager'}`);
-        appendInventoryScanDebug(`Retning sat til: ${inventoryScanMode}`);
-    };
+    const setMode = (mode) => setInventoryScanMode(mode, 'klik');
 
     const registerInventoryMovement = async (barcode, locationIdRaw = '') => {
         const code = String(barcode || '').trim();
@@ -4138,10 +4157,19 @@ function initBarcodeScannerCapture() {
     };
 
     const commitBufferToBarcodeField = async () => {
-        const code = String(buffer || '').trim();
+        const raw = String(buffer || '').trim();
         resetBuffer();
 
+        const modeOnly = parseScannerModeCommand(raw);
+        if (modeOnly) {
+            setInventoryScanMode(modeOnly, 'scanner mode command');
+            return;
+        }
+
+        const code = raw;
+
         if (code.length < 8) {
+            appendInventoryScanDebug(`Ignoreret kort buffer: ${code || '(tom)'}`);
             return;
         }
 
@@ -4154,6 +4182,15 @@ function initBarcodeScannerCapture() {
 
     document.addEventListener('keydown', (event) => {
         if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
+            return;
+        }
+
+        if (event.key === 'F9' || event.key === 'ArrowUp' || event.key === 'PageUp') {
+            setInventoryScanMode('in', `special key ${event.key}`);
+            return;
+        }
+        if (event.key === 'F10' || event.key === 'ArrowDown' || event.key === 'PageDown') {
+            setInventoryScanMode('out', `special key ${event.key}`);
             return;
         }
 
