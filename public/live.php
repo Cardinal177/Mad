@@ -3574,10 +3574,11 @@ async function pollInventoryModeFromServer() {
         const serverMode = String(response?.mode || 'in').trim();
         
         if (serverMode !== inventoryScanMode && (serverMode === 'in' || serverMode === 'out')) {
+            console.log('[Poll] Mode changed from', inventoryScanMode, 'to', serverMode);
             setInventoryScanMode(serverMode, 'server poll');
         }
     } catch (e) {
-        // Silently fail - don't spam debug logs
+        console.error('[Poll] Failed to get mode:', e);
     }
 }
 
@@ -4849,7 +4850,9 @@ enforceAuthGate().then(() => {
     }
 });
 setInterval(refresh, 5000);
-setInterval(pollInventoryModeFromServer, 500);  // Poll server for mode changes from ESP32 button
+const pollModeInterval = setInterval(pollInventoryModeFromServer, 500);  // Poll server for mode changes from ESP32 button
+console.log('[Init] Started mode polling interval:', pollModeInterval);
+pollInventoryModeFromServer();  // Initial poll
 </script>
 </body>
 </html>
