@@ -3568,6 +3568,19 @@ function setInventoryScanMode(mode, source = '') {
     }
 }
 
+async function pollInventoryModeFromServer() {
+    try {
+        const response = await loadJson('api.php?endpoint=device.get_mode');
+        const serverMode = String(response?.mode || 'in').trim();
+        
+        if (serverMode !== inventoryScanMode && (serverMode === 'in' || serverMode === 'out')) {
+            setInventoryScanMode(serverMode, 'server poll');
+        }
+    } catch (e) {
+        // Silently fail - don't spam debug logs
+    }
+}
+
 function parseScannerModeCommand(rawValue) {
     const token = String(rawValue || '').trim().toLowerCase();
     if (!token) {
@@ -4836,6 +4849,7 @@ enforceAuthGate().then(() => {
     }
 });
 setInterval(refresh, 5000);
+setInterval(pollInventoryModeFromServer, 500);  // Poll server for mode changes from ESP32 button
 </script>
 </body>
 </html>
