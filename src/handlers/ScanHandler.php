@@ -92,6 +92,56 @@ function placeholderProductName(string $barcode): string
     return 'Scanned Product ' . substr($barcode, 0, 8);
 }
 
+function stripBrandFromProductName(string $productName, string $brand): string
+{
+    if (!$brand || !$productName) {
+        return $productName;
+    }
+
+    // Normalize text: lowercase, expand camelCase, remove special chars, split to words
+    $normalize = static function (string $s): array {
+        $s = preg_replace('/([a-z])([A-Z])/u', '$1 $2', $s);
+        $s = mb_strtolower($s);
+        $s = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', $s);
+        $words = preg_split('/\s+/u', $s, -1, PREG_SPLIT_NO_EMPTY);
+        return $words ?: [];
+    };
+
+    $brandWords = $normalize($brand);
+    $nameWords = preg_split('/\s+/u', $productName, -1, PREG_SPLIT_NO_EMPTY);
+
+    if (!$brandWords || !$nameWords) {
+        return $productName;
+    }
+
+    // Try to consume leading nameWords that match brand words
+    $consumed = 0;
+    $bi = 0;
+    for ($ni = 0; $ni < count($nameWords) && $bi < count($brandWords); $ni++) {
+        $nw = $normalize($nameWords[$ni]);
+        if (count($nw) === 1 && $nw[0] === $brandWords[$bi]) {
+            // Single word match
+            $consumed = $ni + 1;
+            $bi++;
+        } elseif (implode('', $nw) === implode('', array_slice($brandWords, $bi, count($nw)))) {
+            // Multi-word match (camelCase word matches multiple brand words)
+            $consumed = $ni + 1;
+            $bi += count($nw);
+        } else {
+            break;
+        }
+    }
+
+    if ($consumed > 0) {
+        $remaining = implode(' ', array_slice($nameWords, $consumed));
+        if (strlen($remaining) > 2) {
+            return trim($remaining);
+        }
+    }
+
+    return $productName;
+}
+
 function scanProductsHasColumn(PDO $pdo, string $column): bool
 {
     static $cache = [];
@@ -1165,6 +1215,11 @@ function handleShoppingList(PDO $pdo): void
             $name = trim((string) ($row['linked_product_name'] ?? $row['product_name'] ?? ''));
             if ($name === '') {
                 $name = 'Ukendt vare';
+            }
+
+            $brand = (string) ($row['brand'] ?? '');
+            if ($brand && $name !== 'Ukendt vare') {
+                $name = stripBrandFromProductName($name, $brand);
             }
 
             $storedOfferId = isset($row['offer_id']) && $row['offer_id'] !== null ? (int) $row['offer_id'] : null;
