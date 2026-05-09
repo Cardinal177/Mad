@@ -247,7 +247,7 @@ if ($householdName === '') {
         if (!selected.size) return;
         const items = Array.from(selected).map(id => {
             const o = all.find(x => x.id === id);
-            return { title: o?.product_name || 'Ukendt', store: STORE };
+            return { title: o?.product_name || 'Ukendt', store: STORE, offerId: Number(o?.id || 0) };
         });
         try {
             const r = await fetch(`../api.php?endpoint=shopping.list.add_items&household_id=${encodeURIComponent(household)}`, {

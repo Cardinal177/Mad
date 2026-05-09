@@ -935,10 +935,31 @@ function handleShoppingList(PDO $pdo): void
                 'offer_valid_to' => ($row['offer_valid_until'] !== null)
                     ? (string) $row['offer_valid_until']
                     : (($row['fallback_offer_valid_to'] !== null) ? (string) $row['fallback_offer_valid_to'] : null),
+                'offer_store' => '',
                 'is_checked' => !empty($row['is_checked']),
                 'created_at' => $row['created_at'] !== null ? (string) $row['created_at'] : null,
             ];
         }, $stmt->fetchAll() ?: []);
+
+        foreach ($items as $index => $item) {
+            $hasPrice = isset($item['offer_price']) && $item['offer_price'] !== null;
+            if ($hasPrice) {
+                continue;
+            }
+
+            $fallback = resolveBestOfferForShoppingItem(
+                $pdo,
+                (string) ($item['product_name'] ?? ''),
+                (string) ($item['preferred_store'] ?? '')
+            );
+            if ($fallback === null) {
+                continue;
+            }
+
+            $items[$index]['offer_price'] = $fallback['offer_price'];
+            $items[$index]['offer_valid_to'] = $fallback['offer_valid_to'];
+            $items[$index]['offer_store'] = $fallback['offer_store'];
+        }
 
         $checkedItems = count(array_filter($items, static fn(array $item): bool => !empty($item['is_checked'])));
 
@@ -965,6 +986,232 @@ function handleShoppingList(PDO $pdo): void
             'message' => $e->getMessage(),
         ]);
     }
+}
+
+function normalizeShoppingMatchText(string $value): string
+{
+    $text = mb_strtolower(trim($value), 'UTF-8');
+    $text = strtr($text, [
+        'æ' => 'ae',
+        'ø' => 'oe',
+        'å' => 'aa',
+    ]);
+    $text = preg_replace('/[^a-z0-9\s]+/u', ' ', $text) ?? '';
+    $text = preg_replace('/\s+/u', ' ', $text) ?? '';
+    return trim($text);
+}
+
+function shoppingMatchTokens(string $value): array
+{
+    $normalized = normalizeShoppingMatchText($value);
+    if ($normalized === '') {
+        return [];
+    }
+
+    $parts = preg_split('/\s+/u', $normalized) ?: [];
+    $tokens = [];
+    foreach ($parts as $part) {
+        $token = trim($part);
+        if ($token === '' || mb_strlen($token, 'UTF-8') < 3) {
+            continue;
+        }
+        $tokens[$token] = true;
+    }
+    return array_map(static fn($token): string => (string) $token, array_keys($tokens));
+}
+
+function isShoppingStopToken(string $token): bool
+{
+    static $stop = [
+        'tilbud' => true,
+        'udvalgte' => true,
+        'oekologisk' => true,
+        'okologisk' => true,
+        'med' => true,
+        'for' => true,
+        'og' => true,
+        'eller' => true,
+        'stk' => true,
+        'ml' => true,
+        'cl' => true,
+        'gr' => true,
+        'g' => true,
+        'kg' => true,
+        'l' => true,
+        'x' => true,
+    ];
+    return isset($stop[$token]);
+}
+
+function hasStrongTokenOverlap(string $shoppingTitle, string $offerTitle): bool
+{
+    $aTokens = shoppingMatchTokens($shoppingTitle);
+    $bTokens = shoppingMatchTokens($offerTitle);
+    if ($aTokens === [] || $bTokens === []) {
+        return false;
+    }
+
+    $bSet = array_fill_keys($bTokens, true);
+    foreach ($aTokens as $token) {
+        if (mb_strlen($token, 'UTF-8') < 5) {
+            continue;
+        }
+        if (isShoppingStopToken($token)) {
+            continue;
+        }
+        if (isset($bSet[$token])) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function knownFoodKeywords(string $value): array
+{
+    static $known = [
+        'skyr' => true,
+        'yoghurt' => true,
+        'maelk' => true,
+        'ost' => true,
+        'smoer' => true,
+        'floe' => true,
+        'flode' => true,
+        'marmelade' => true,
+        'kakao' => true,
+        'juice' => true,
+        'cola' => true,
+        'oel' => true,
+        'broed' => true,
+        'rugbroed' => true,
+        'paalaeg' => true,
+        'palaeg' => true,
+        'rullepoelse' => true,
+        'rullepolse' => true,
+        'kylling' => true,
+        'okse' => true,
+        'svin' => true,
+        'fars' => true,
+        'fisk' => true,
+        'laks' => true,
+        'tun' => true,
+        'pasta' => true,
+        'ris' => true,
+        'tomat' => true,
+        'kartoffel' => true,
+        'loeg' => true,
+        'banan' => true,
+        'aeble' => true,
+        'agurk' => true,
+    ];
+
+    $tokens = shoppingMatchTokens($value);
+    $hits = [];
+    foreach ($tokens as $token) {
+        if (isset($known[$token])) {
+            $hits[$token] = true;
+        }
+    }
+    return array_keys($hits);
+}
+
+function scoreShoppingTitleMatch(string $shoppingTitle, string $offerTitle): float
+{
+    $aNorm = normalizeShoppingMatchText($shoppingTitle);
+    $bNorm = normalizeShoppingMatchText($offerTitle);
+    if ($aNorm === '' || $bNorm === '') {
+        return 0.0;
+    }
+
+    if ($aNorm === $bNorm) {
+        return 100.0;
+    }
+
+    $aTokens = shoppingMatchTokens($aNorm);
+    $bTokens = shoppingMatchTokens($bNorm);
+    if ($aTokens === [] || $bTokens === []) {
+        return 0.0;
+    }
+
+    $aSet = array_fill_keys($aTokens, true);
+    $bSet = array_fill_keys($bTokens, true);
+    $overlap = 0;
+    foreach ($aSet as $token => $_) {
+        if (isset($bSet[$token])) {
+            $overlap++;
+        }
+    }
+
+    $union = count($aSet) + count($bSet) - $overlap;
+    $jaccard = $union > 0 ? ($overlap / $union) : 0.0;
+    $coverage = count($aSet) > 0 ? ($overlap / count($aSet)) : 0.0;
+
+    $score = ($coverage * 75.0) + ($jaccard * 25.0);
+    if (str_contains($bNorm, $aNorm) || str_contains($aNorm, $bNorm)) {
+        $score += 6.0;
+    }
+    return min($score, 100.0);
+}
+
+function resolveBestOfferForShoppingItem(PDO $pdo, string $productName, string $preferredStore = ''): ?array
+{
+    $normalizedName = normalizeShoppingMatchText($productName);
+    if ($normalizedName === '') {
+        return null;
+    }
+
+    $normalizedStore = normalizeShoppingMatchText($preferredStore);
+
+    $sql = 'SELECT id, store_name, title, price, valid_to, created_at
+            FROM store_offers
+            WHERE (valid_to IS NULL OR valid_to >= CURDATE())';
+    $params = [];
+
+    if ($normalizedStore !== '') {
+        $sql .= ' AND LOWER(TRIM(store_name)) = LOWER(TRIM(?))';
+        $params[] = $preferredStore;
+    }
+
+    $sql .= ' ORDER BY created_at DESC, id DESC LIMIT 500';
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $offers = $stmt->fetchAll() ?: [];
+
+    $best = null;
+    foreach ($offers as $offer) {
+        $title = (string) ($offer['title'] ?? '');
+        $score = scoreShoppingTitleMatch($productName, $title);
+        if ($score < 58.0) {
+            continue;
+        }
+
+        $strongOverlap = hasStrongTokenOverlap($productName, $title);
+        if (!$strongOverlap && $score < 92.0) {
+            continue;
+        }
+
+        $shoppingKeywords = knownFoodKeywords($productName);
+        $offerKeywords = knownFoodKeywords($title);
+        if ($shoppingKeywords !== [] && $offerKeywords !== []) {
+            $intersect = array_intersect($shoppingKeywords, $offerKeywords);
+            if ($intersect === [] && $score < 99.0) {
+                continue;
+            }
+        }
+
+        if ($best === null || $score > (float) $best['score']) {
+            $best = [
+                'offer_price' => isset($offer['price']) ? (float) $offer['price'] : null,
+                'offer_valid_to' => $offer['valid_to'] !== null ? (string) $offer['valid_to'] : null,
+                'offer_store' => (string) ($offer['store_name'] ?? ''),
+                'offer_title' => $title,
+                'score' => $score,
+            ];
+        }
+    }
+
+    return $best;
 }
 
 function handleRecipeList(PDO $pdo): void
