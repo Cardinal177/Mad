@@ -145,7 +145,7 @@ declare(strict_types=1);
             <button id="gateSend" class="btn-primary" type="button">Send kode</button>
             <input id="gateCode" type="text" maxlength="6" inputmode="numeric" placeholder="SMS kode (6 cifre)">
             <button id="gateVerify" class="btn-primary" type="button">Log ind</button>
-            <div id="gateStatus" class="status">2FA paakraevet.</div>
+            <div id="gateStatus" class="status">2FA påkrævet.</div>
         </div>
     </div>
 </div>
@@ -191,7 +191,7 @@ declare(strict_types=1);
 
 <nav class="bottom-nav" aria-label="Mobil navigation">
     <div class="inner">
-        <a class="nav-btn" href="mobile-shopping.php">Indkoeb</a>
+        <a class="nav-btn" href="mobile-shopping.php">Indkøb</a>
         <a class="nav-btn active" href="mobile-lager.php">Lager</a>
     </div>
 </nav>
@@ -337,7 +337,7 @@ async function verifyCode() {
     const payload = await apiPost('api.php?endpoint=auth.verify_code', {challenge_id: challengeId, code});
     accessToken = String(payload?.access_token || '');
     if (!accessToken) {
-        throw new Error('Mangler access token');
+        throw new Error('Mangler adgangstoken');
     }
     const targetHousehold = Number(payload?.active_household_id || 0);
     if (targetHousehold > 0 && (!householdId || householdId <= 0)) {
@@ -370,7 +370,7 @@ async function refreshInventory() {
     const list = document.getElementById('list');
     const summary = document.getElementById('invSummary');
     if (summary) {
-        summary.textContent = products.length + ' varer paa lager';
+        summary.textContent = products.length + ' varer på lager';
     }
     if (!list) return;
 
@@ -392,7 +392,7 @@ async function refreshLocations() {
     const locations = Array.isArray(data?.locations) ? data.locations : [];
     const select = document.getElementById('locationSelect');
     if (!select) return;
-    const fallback = [{id: 1, name: 'Koekken'}];
+    const fallback = [{id: 1, name: 'Køkken'}];
     const rows = locations.length ? locations : fallback;
     select.innerHTML = rows
         .map((l) => `<option value="${Number(l?.id || 1)}">${esc(String(l?.name || 'Lokation'))}</option>`)
@@ -422,7 +422,7 @@ async function postScan(barcode) {
 
     const autoAdded = !!payload?.auto_added_to_shopping_list;
     const autoRemoved = !!payload?.auto_removed_from_shopping_list;
-    const suffix = autoAdded ? ' · tilfoejet til indkoeb' : (autoRemoved ? ' · fjernet fra indkoeb' : '');
+    const suffix = autoAdded ? ' · tilføjet til indkøb' : (autoRemoved ? ' · fjernet fra indkøb' : '');
     setStatus('scanStatus', 'Registreret: ' + code + ' (' + (movementType === 'out' ? 'ud' : 'ind') + ')' + suffix);
     await refreshInventory();
 }
@@ -453,7 +453,7 @@ async function startCamera() {
     if (!(video instanceof HTMLVideoElement)) return;
 
     if (!('BarcodeDetector' in window)) {
-        setStatus('scanStatus', 'Denne browser understoetter ikke BarcodeDetector. Brug manuel scan.', true);
+        setStatus('scanStatus', 'Denne browser understøtter ikke BarcodeDetector. Brug manuel scan.', true);
         return;
     }
 

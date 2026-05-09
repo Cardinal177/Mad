@@ -5,7 +5,7 @@ declare(strict_types=1);
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>Mad - Mobil Indkoeb</title>
+    <title>Mad - Mobil Indkøb</title>
     <style>
         :root {
             --bg: #f6f2ea;
@@ -75,6 +75,7 @@ declare(strict_types=1);
             background: #fff;
         }
         .item.checked { opacity: 0.6; }
+        .item-main { cursor: pointer; }
         .check {
             width: 34px;
             height: 34px;
@@ -148,35 +149,35 @@ declare(strict_types=1);
             <button id="gateSend" class="btn-primary" type="button">Send kode</button>
             <input id="gateCode" type="text" maxlength="6" inputmode="numeric" placeholder="SMS kode (6 cifre)">
             <button id="gateVerify" class="btn-primary" type="button">Log ind</button>
-            <div id="gateStatus" class="status">2FA paakraevet.</div>
+            <div id="gateStatus" class="status">2FA påkrævet.</div>
         </div>
     </div>
 </div>
 
 <main id="app" class="wrap" aria-hidden="true" inert>
     <header class="top">
-        <h1>Mobil indkoebsseddel</h1>
+        <h1>Mobil indkøbsseddel</h1>
         <p class="sub" id="who">Henter session...</p>
     </header>
 
-    <section class="card stack" aria-label="Tilfoej vare">
+    <section class="card stack" aria-label="Tilføj vare">
         <div class="row">
-            <input id="addInput" type="text" placeholder="Skriv vare (fx Faxe Kondi) eller vaelg lagerforslag">
-            <button id="addBtn" class="btn-primary" type="button">Tilfoej</button>
+            <input id="addInput" type="text" placeholder="Skriv vare (fx Faxe Kondi) eller vælg lagerforslag">
+            <button id="addBtn" class="btn-primary" type="button">Tilføj</button>
         </div>
         <div id="suggestions" class="suggestions"></div>
         <div id="addStatus" class="status"></div>
     </section>
 
-    <section class="card" style="margin-top:10px" aria-label="Indkoebsliste">
+    <section class="card" style="margin-top:10px" aria-label="Indkøbsliste">
         <ul id="list" class="list"></ul>
-        <div id="empty" class="empty" style="display:none">Ingen varer paa indkoebssedlen endnu.</div>
+        <div id="empty" class="empty" style="display:none">Ingen varer på indkøbssedlen endnu.</div>
     </section>
 </main>
 
 <nav class="bottom-nav" aria-label="Mobil navigation">
     <div class="inner">
-        <a class="nav-btn active" href="mobile-shopping.php">Indkoeb</a>
+        <a class="nav-btn active" href="mobile-shopping.php">Indkøb</a>
         <a class="nav-btn" href="mobile-lager.php">Lager</a>
     </div>
 </nav>
@@ -317,12 +318,12 @@ function renderList(items) {
         const id = Number(item?.id || 0);
         const displayName = resolveDisplayName(item);
         const store = String(item?.preferred_store || '').trim();
-        const meta = store ? store : 'Indkoeb';
+        const meta = store ? store : 'Indkøb';
         const hasPrice = item?.offer_price !== null && item?.offer_price !== undefined && !Number.isNaN(Number(item.offer_price));
         const price = hasPrice ? Number(item.offer_price).toFixed(2).replace('.', ',') + ' kr' : '';
         return `<li class="item${checked ? ' checked' : ''}">
             <button class="check" data-action="toggle" data-id="${id}" data-next="${checked ? '0' : '1'}">${checked ? 'OK' : '+'}</button>
-            <div>
+            <div class="item-main" data-action="toggle" data-id="${id}" data-next="${checked ? '0' : '1'}" role="button" tabindex="0" aria-label="Marker ${esc(displayName)} som købt">
                 <p class="name">${esc(displayName)}</p>
                 <p class="meta">${esc(meta)}</p>
                 ${price ? `<div class="price">${esc(price)}</div>` : ''}
@@ -376,7 +377,7 @@ function renderSuggestions(rawQuery) {
                 <div class="sg-name">${esc(name)}</div>
                 <div class="sg-meta">${esc(meta)}</div>
             </div>
-            <button class="sg-add" type="button" data-action="add-sg" data-id="${id}" data-name="${esc(name)}" data-store="${esc(store)}">Tilfoej</button>
+            <button class="sg-add" type="button" data-action="add-sg" data-id="${id}" data-name="${esc(name)}" data-store="${esc(store)}">Tilføj</button>
         </div>`;
     }).join('');
     el.style.display = '';
@@ -433,7 +434,7 @@ async function verifyCode() {
     const payload = await apiPost('api.php?endpoint=auth.verify_code', {challenge_id: challengeId, code});
     accessToken = String(payload?.access_token || '');
     if (!accessToken) {
-        throw new Error('Mangler access token');
+        throw new Error('Mangler adgangstoken');
     }
     const targetHousehold = Number(payload?.active_household_id || 0);
     if (targetHousehold > 0 && (!householdId || householdId <= 0)) {
@@ -505,10 +506,10 @@ addBtn?.addEventListener('click', async () => {
             suggestions.style.display = 'none';
             suggestions.innerHTML = '';
         }
-        setStatus('addStatus', 'Vare tilfoejet.');
+        setStatus('addStatus', 'Vare tilføjet.');
         await refreshShopping();
     } catch (e) {
-        setStatus('addStatus', 'Kunne ikke tilfoeje: ' + String(e?.message || e), true);
+        setStatus('addStatus', 'Kunne ikke tilføje: ' + String(e?.message || e), true);
     } finally {
         addBtn.disabled = false;
         addInput.focus();
@@ -552,23 +553,25 @@ suggestions?.addEventListener('click', async (event) => {
             suggestions.style.display = 'none';
             suggestions.innerHTML = '';
         }
-        setStatus('addStatus', 'Vare tilfoejet fra lager.');
+        setStatus('addStatus', 'Vare tilføjet fra lager.');
         await refreshShopping();
     } catch (e) {
-        setStatus('addStatus', 'Kunne ikke tilfoeje fra lager: ' + String(e?.message || e), true);
+        setStatus('addStatus', 'Kunne ikke tilføje fra lager: ' + String(e?.message || e), true);
     }
 });
 
 document.getElementById('list')?.addEventListener('click', async (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    const action = target.dataset.action || '';
-    const id = Number(target.dataset.id || 0);
+    const actionEl = target.closest('[data-action]');
+    if (!(actionEl instanceof HTMLElement)) return;
+    const action = actionEl.dataset.action || '';
+    const id = Number(actionEl.dataset.id || 0);
     if (!id) return;
 
     try {
         if (action === 'toggle') {
-            const next = target.dataset.next === '1';
+            const next = actionEl.dataset.next === '1';
             await apiPost(`api.php?endpoint=shopping.list.set_item_checked&household_id=${encodeURIComponent(householdId || 1)}`, {
                 item_id: id,
                 is_checked: next,
@@ -585,6 +588,15 @@ document.getElementById('list')?.addEventListener('click', async (event) => {
     } catch (e) {
         setStatus('addStatus', 'Handling fejlede: ' + String(e?.message || e), true);
     }
+});
+
+document.getElementById('list')?.addEventListener('keydown', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.dataset.action !== 'toggle') return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    target.click();
 });
 
 bootstrap();
