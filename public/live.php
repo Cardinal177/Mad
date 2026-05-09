@@ -3619,6 +3619,12 @@ async function syncDeviceScanContext(force = false) {
     };
 
     try {
+        await postJson('api.php?endpoint=device.set_context', {
+            household_id: contextPayload.household_id,
+            location_id: contextPayload.location_id,
+        }, {includeDeviceToken: true});
+
+        // Keep mode endpoint in sync for ESP display behavior.
         await postJson('api.php?endpoint=device.set_mode', contextPayload, {includeDeviceToken: true});
     } catch (err) {
         appendInventoryScanDebug(`Advarsel: kunne ikke synke scan-kontekst: ${String(err?.message || err)}`);

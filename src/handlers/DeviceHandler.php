@@ -136,3 +136,30 @@ function handleDeviceGetLastScan(): void
         ],
     ]);
 }
+
+function handleDeviceSetContext(): void
+{
+    $data = parseJsonInput();
+    $householdId = isset($data['household_id']) ? max(1, (int) $data['household_id']) : 1;
+    $locationId = isset($data['location_id']) ? max(1, (int) $data['location_id']) : 1;
+
+    $contextFile = sys_get_temp_dir() . '/mad_device_scan_context.txt';
+    $content = json_encode([
+        'household_id' => $householdId,
+        'location_id' => $locationId,
+        'timestamp' => time(),
+        'set_at' => date('Y-m-d H:i:s'),
+    ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+
+    if (!file_put_contents($contextFile, (string) $content)) {
+        response(500, ['error' => 'Failed to store scan context']);
+        return;
+    }
+
+    response(200, [
+        'status' => 'ok',
+        'household_id' => $householdId,
+        'location_id' => $locationId,
+        'message' => 'Scan context updated',
+    ]);
+}

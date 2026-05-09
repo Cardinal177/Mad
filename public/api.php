@@ -166,6 +166,11 @@ try {
         exit;
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'device.set_context') {
+        handleDeviceSetContext();
+        exit;
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'device.get_mode') {
         handleDeviceGetMode();
         exit;

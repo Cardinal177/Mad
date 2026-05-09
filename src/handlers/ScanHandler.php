@@ -280,21 +280,36 @@ function removeProductFromOpenShoppingListIfPresent(PDO $pdo, int $householdId, 
 
 function getDeviceScanContext(): array
 {
-    $modeFile = sys_get_temp_dir() . '/mad_device_mode.txt';
-    if (!file_exists($modeFile)) {
-        return [
-            'household_id' => null,
-            'location_id' => null,
-        ];
+    $contextFile = sys_get_temp_dir() . '/mad_device_scan_context.txt';
+    $data = null;
+
+    if (file_exists($contextFile)) {
+        $contextContent = file_get_contents($contextFile);
+        $contextData = json_decode((string) $contextContent, true);
+        if (is_array($contextData)) {
+            $data = $contextData;
+        }
     }
 
-    $content = file_get_contents($modeFile);
-    $data = json_decode((string) $content, true);
+    // Backward-compatible fallback.
     if (!is_array($data)) {
-        return [
-            'household_id' => null,
-            'location_id' => null,
-        ];
+        $modeFile = sys_get_temp_dir() . '/mad_device_mode.txt';
+        if (!file_exists($modeFile)) {
+            return [
+                'household_id' => null,
+                'location_id' => null,
+            ];
+        }
+
+        $content = file_get_contents($modeFile);
+        $decoded = json_decode((string) $content, true);
+        if (!is_array($decoded)) {
+            return [
+                'household_id' => null,
+                'location_id' => null,
+            ];
+        }
+        $data = $decoded;
     }
 
     $householdId = isset($data['household_id']) ? (int) $data['household_id'] : null;
