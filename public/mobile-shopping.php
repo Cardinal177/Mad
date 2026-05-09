@@ -64,11 +64,29 @@ declare(strict_types=1);
             font-weight: 800;
             letter-spacing: 0.2px;
             padding: 10px 0;
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+        }
+        .store-btn:active {
+            transform: scale(0.98);
+        }
+        .store-btn[data-store="Netto"] {
+            background: linear-gradient(135deg, #ffd54f 0%, #ffca28 100%);
+            color: #332200;
+            border-color: rgba(212,136,6,0.55);
+        }
+        .store-btn[data-store="Kvickly"] {
+            background: linear-gradient(135deg, #ef5350 0%, #d32f2f 100%);
+            color: #fff;
+            border-color: rgba(163,28,28,0.75);
+        }
+        .store-btn[data-store="365discount"] {
+            background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%);
+            color: #fff;
+            border-color: rgba(31,106,35,0.75);
         }
         .store-btn.selected {
-            border-color: var(--accent);
-            color: var(--accent);
-            background: rgba(47,106,86,0.1);
+            box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(47,106,86,0.5);
+            transform: translateY(-1px);
         }
         input, button {
             border-radius: 12px;
