@@ -335,8 +335,21 @@ function handleScan(PDO $pdo): void
         $stmt = $pdo->prepare('SELECT id FROM household_locations WHERE id = ? AND household_id = ? LIMIT 1');
         $stmt->execute([$locationId, $householdId]);
         if (!$stmt->fetch()) {
-            response(404, ['error' => 'Location not found for household']);
-            return;
+            // Fallback to first valid location for the household instead of failing the scan.
+            $fallbackStmt = $pdo->prepare(
+                'SELECT id
+                 FROM household_locations
+                 WHERE household_id = ?
+                 ORDER BY id ASC
+                 LIMIT 1'
+            );
+            $fallbackStmt->execute([$householdId]);
+            $fallback = $fallbackStmt->fetch();
+            if (!$fallback) {
+                response(404, ['error' => 'Location not found for household']);
+                return;
+            }
+            $locationId = (int) $fallback['id'];
         }
 
         $productLookupSource = 'existing';
