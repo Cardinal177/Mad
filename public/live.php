@@ -1956,6 +1956,7 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                     <aside class="shopping-top-sidebar">
                         <div class="shopping-sticky" style="position: static; max-height: none; top: auto;">
                             <h3 class="subsection-title" style="margin: 0 0 12px; font-size: 16px; border-bottom: 2px solid var(--line); padding-bottom: 8px;">Indkøbsseddel</h3>
+                            <button id="fetchBasisBtn" type="button" style="margin-bottom:10px; padding:6px 12px; border-radius:10px; border:1px solid rgba(47,106,86,0.4); color:var(--accent); background:rgba(47,106,86,0.08); font-size:13px; font-weight:700; cursor:pointer;">Hent basisvarer</button>
                             <div class="inventory-grid" id="shoppingBody"></div>
                         </div>
                     </aside>
@@ -2674,8 +2675,8 @@ function renderProducts(products) {
                 </div>
                 <div class="inventory-qty-col">
                     <span class="state-badge ${state.className}" style="margin-bottom:2px">${esc(state.label)}</span>
-                    <span class="inventory-qty-main" data-field="quantity">${esc(formatQuantity(product.quantity ?? 0))}</span>
-                    <span class="inventory-qty-min">min ${esc(formatQuantity(product.minimum_quantity ?? 0))}</span>
+                    ${isBasis ? `<span class="inventory-qty-main" data-field="quantity">${esc(formatQuantity(product.quantity ?? 0))}</span>` : ''}
+                    ${isBasis ? `<span class="inventory-qty-min">min ${esc(formatQuantity(product.minimum_quantity ?? 0))}</span>` : ''}
                 </div>
             </div>
             <div class="inventory-card-actions">
@@ -2854,14 +2855,10 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
     });
 
     const rowsHtml = sortedItems.map(item => {
-        const baseType = productTypeLabel(item?.product_type || 'andet');
-        const typeText = (String(item?.product_type || 'andet') === 'andet')
-            ? inferCategoryLabelFromName(item?.product_name || '')
-            : baseType;
         const offerSource = String(item?.offer_source || '').trim();
         const isSuggestion = offerSource === 'fuzzy_fallback' || offerSource === 'exact_title_fallback';
         const storeText = isSuggestion ? '' : String(item?.preferred_store || '').trim();
-        const metaParts = [typeText];
+        const metaParts = [];
         if (storeText) {
             metaParts.push(storeText);
         }
@@ -2949,10 +2946,14 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
 
         const itemId = Number(item?.id || 0);
         const isChecked = !!item?.is_checked;
+        const isBasis = !!item?.is_basis;
         const showAppliedPrice = !isSuggestion && hasOffer;
         const priceBadge = showAppliedPrice
             ? `<span class="shopping-price" title="Tilbudspris">${esc(formatDkk(rowPrice))}</span>`
             : '<span class="shopping-price missing" title="Pris ikke fundet">pris ?</span>';
+        const quantityBadge = isBasis
+            ? `<span class="shopping-qty">${esc(formatQuantity(item?.quantity ?? 1))}</span>`
+            : '';
         const offerPick = isSuggestion && hasOffer && offerStore
             ? `<button class="shopping-offer-pick"
                 data-shopping-action="offer"
@@ -2987,7 +2988,7 @@ function renderShoppingList(items, shoppingList = null, candidateItems = []) {
                 ${offerPick}
             </div>
             <div class="shopping-pills">
-                <span class="shopping-qty">${esc(formatQuantity(item?.quantity ?? 1))}</span>
+                ${quantityBadge}
                 ${priceBadge}
             </div>
             <button class="shopping-delete"
@@ -3025,6 +3026,25 @@ async function removeShoppingItem(itemId) {
 }
 
 function initShoppingListActions() {
+    const fetchBasisBtn = document.getElementById('fetchBasisBtn');
+    if (fetchBasisBtn && !fetchBasisBtn.dataset.bound) {
+        fetchBasisBtn.dataset.bound = '1';
+        fetchBasisBtn.addEventListener('click', async () => {
+            fetchBasisBtn.disabled = true;
+            fetchBasisBtn.textContent = 'Henter...';
+            const targetHouseholdId = Number(householdId || 0) > 0 ? String(householdId) : '1';
+            try {
+                const res = await postJson(`api.php?endpoint=shopping.list.fetch_basis_low&household_id=${encodeURIComponent(targetHouseholdId)}`, {});
+                await refresh();
+            } catch (e) {
+                console.error('Hent basisvarer fejlede:', e);
+            } finally {
+                fetchBasisBtn.disabled = false;
+                fetchBasisBtn.textContent = 'Hent basisvarer';
+            }
+        });
+    }
+
     const body = document.getElementById('shoppingBody');
     if (!body || body.dataset.actionsBound === '1') {
         return;
@@ -5375,12 +5395,7 @@ async function refresh() {
         initInventoryCardActions();
         initInventoryShoppingSearch();
         initInventoryScanActions();
-        if (shoppingListItems.length > 0) {
-            renderShoppingList(shoppingListItems, shoppingList.list || null, shopping.items || []);
-        } else {
-            // Fallback to candidate view so users still see actionable items before first manual add.
-            renderShoppingCandidates(shoppingCandidateItems);
-        }
+        renderShoppingList(shoppingListItems, shoppingList.list || null, shopping.items || []);
         renderOfferHighlights(shopping.items || []);
         renderLeafletOfferFeed(leafletOffersWithoutNetto, offerFeed.items || []);
 
@@ -5389,11 +5404,7 @@ async function refresh() {
         document.getElementById('lowStockCount').textContent = String(lowStock);
         document.getElementById('activityChip').textContent = `${scans.length} hændelser`;
         document.getElementById('inventoryChip').textContent = `${balanced} i balance`;
-        if (shoppingListItems.length > 0) {
-            document.getElementById('shoppingChip').textContent = `${Number(shoppingList?.summary?.unchecked_items || 0)} på sedlen`;
-        } else {
-            document.getElementById('shoppingChip').textContent = `${Number(shopping?.summary?.total_candidates || 0)} klare kandidater`;
-        }
+        document.getElementById('shoppingChip').textContent = `${Number(shoppingList?.summary?.unchecked_items || 0)} på sedlen`;
         const offersChip = document.getElementById('offersChip');
         if (offersChip) {
             offersChip.textContent = `${Number(shopping?.summary?.with_offer || 0)} tilbud fundet`;

@@ -138,13 +138,15 @@ declare(strict_types=1);
             overflow: hidden;
         }
         .item-card {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 10px;
-            align-items: center;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: flex-start;
+            gap: 4px;
             border: 2px solid #d8cbb4;
             border-radius: 12px;
             padding: 10px;
+            min-height: 72px;
             background: #f3ebdd;
             transition: transform 0.18s ease;
             position: relative;
@@ -192,23 +194,63 @@ declare(strict_types=1);
             align-items: center;
             justify-content: center;
         }
-        .name { margin: 0; font-size: 15px; font-weight: 700; }
-        .meta { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+        .item-head {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .name {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 700;
+            line-height: 1.25;
+            min-height: 1.25em;
+            flex: 1;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .meta {
+            margin: 0;
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.25;
+            min-height: 1.25em;
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
         .price { font-size: 12px; color: var(--accent); font-weight: 700; }
         .offer-chip {
-            margin-top: 8px;
+            margin-top: 0;
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            justify-self: start;
             width: fit-content;
+            flex-shrink: 0;
             border-radius: 999px;
             border: 1px solid var(--line);
-            padding: 6px 10px;
+            padding: 4px 8px;
             font-size: 12px;
             font-weight: 700;
             background: #fff;
             color: var(--text);
+        }
+        .basis-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            border: 1px solid rgba(47,106,86,0.35);
+            background: rgba(47,106,86,0.08);
+            color: var(--accent);
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1;
         }
         .offer-logo {
             width: 20px;
@@ -318,6 +360,43 @@ declare(strict_types=1);
             -webkit-touch-callout: none;
         }
         .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 20px 8px; }
+        .list-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .list-title {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text);
+        }
+        .list-clear-btn {
+            border-radius: 10px;
+            border: 1px solid rgba(192,57,43,0.4);
+            color: #a23428;
+            background: rgba(192,57,43,0.08);
+            font-size: 12px;
+            font-weight: 700;
+            padding: 6px 10px;
+        }
+        .list-clear-btn:disabled {
+            opacity: 0.55;
+        }
+        .list-fetch-basis-btn {
+            border-radius: 10px;
+            border: 1px solid rgba(47,106,86,0.4);
+            color: var(--accent);
+            background: rgba(47,106,86,0.08);
+            font-size: 12px;
+            font-weight: 700;
+            padding: 6px 10px;
+        }
+        .list-fetch-basis-btn:disabled {
+            opacity: 0.55;
+        }
 
         .bottom-nav {
             position: fixed;
@@ -422,6 +501,11 @@ declare(strict_types=1);
     </section>
 
     <section class="card" style="margin-top:10px" aria-label="Indkøbsliste">
+        <div class="list-head">
+            <p class="list-title">Indkøbsliste</p>
+            <button id="fetchBasisBtn" class="list-fetch-basis-btn" type="button">Hent basisvarer</button>
+            <button id="clearCheckedBtn" class="list-clear-btn" type="button" hidden>Ryd købte varer</button>
+        </div>
         <ul id="list" class="list"></ul>
         <div id="empty" class="empty" style="display:none">Ingen varer på indkøbssedlen endnu.</div>
     </section>
@@ -457,6 +541,10 @@ declare(strict_types=1);
                 <button class="store-btn" type="button" data-store="Kvickly">K</button>
                 <button class="store-btn" type="button" data-store="365discount">365</button>
             </div>
+            <label class="basis-chip" style="cursor:pointer; width:fit-content;">
+                <input id="editBasis" type="checkbox" style="margin:0; width:13px; height:13px; accent-color:var(--accent);">
+                <span>Basisvare</span>
+            </label>
         </div>
         <div class="edit-actions">
             <button id="editSaveBtn" class="btn-primary" type="button">Gem</button>
@@ -728,11 +816,15 @@ function renderList(items) {
     }
 
     empty.style.display = 'none';
-    listEl.innerHTML = rows.map((item) => {
+
+    let html = '';
+    rows.forEach((item) => {
         const checked = !!item?.is_checked;
+
         const id = Number(item?.id || 0);
         const displayName = resolveDisplayName(item);
         const quantity = Math.max(1, Number(item?.quantity || 1));
+        const isBasis = !!item?.is_basis;
         const offerId = Number(item?.offer_id || 0);
         const offerTitle = String(item?.offer_title || '').trim();
         const offerSource = String(item?.offer_source || '').trim();
@@ -740,8 +832,10 @@ function renderList(items) {
         const visibleStore = isSuggestion ? '' : String(item?.preferred_store || item?.offer_store || '').trim();
         const hasVisiblePrice = !isSuggestion && item?.offer_price !== null && item?.offer_price !== undefined && !Number.isNaN(Number(item.offer_price));
         const visiblePrice = hasVisiblePrice ? Number(item.offer_price).toFixed(2).replace('.', ',') + ' kr' : '-';
-        const meta = `Antal: ${Number.isInteger(quantity) ? quantity : quantity.toString().replace('.', ',')}`
-            + ` · Pris: ${visiblePrice}`
+        const quantityMeta = isBasis
+            ? `Antal: ${Number.isInteger(quantity) ? quantity : quantity.toString().replace('.', ',')} · `
+            : '';
+        const meta = quantityMeta + `Pris: ${visiblePrice}`
             + ` · Butik: ${visibleStore || '-'}`;
         const offerStore = String(item?.offer_store || visibleStore || '').trim();
         const offerPrice = item?.offer_price !== null && item?.offer_price !== undefined && !Number.isNaN(Number(item.offer_price))
@@ -752,15 +846,19 @@ function renderList(items) {
                 <span>Tilbud</span>
             </button>`
             : '';
-        return `<li class="item-shell${checked ? ' checked' : ''}" data-item-id="${id}">
+        html += `<li class="item-shell${checked ? ' checked' : ''}" data-item-id="${id}">
             <button class="swipe-delete" data-action="remove" data-id="${id}">Slet</button>
             <div class="item-card item-main" data-action="toggle" data-id="${id}" data-next="${checked ? '0' : '1'}" role="button" tabindex="0" aria-label="Marker ${esc(displayName)} som købt">
-                <p class="name">${esc(displayName)}</p>
+                <div class="item-head">
+                    <p class="name">${esc(displayName)}</p>
+                    ${offerBadge}
+                    ${isBasis ? '<span class="basis-chip">Basisvare</span>' : ''}
+                </div>
                 <p class="meta">${esc(meta)}</p>
-                ${offerBadge}
             </div>
         </li>`;
-    }).join('');
+    });
+    listEl.innerHTML = html;
 
     bindShoppingSwipeRows();
 }
@@ -803,6 +901,10 @@ function openEditModal(itemId) {
     qtyEl.value = String(Math.max(1, Math.round(Number(item?.quantity || 1))));
     setEditStore(String(item?.preferred_store || '').trim());
     titleEl.textContent = 'Ret ' + resolveDisplayName(item);
+    const editBasisEl = document.getElementById('editBasis');
+    if (editBasisEl instanceof HTMLInputElement) {
+        editBasisEl.checked = !!item?.is_basis;
+    }
 
     // Clear accidental text selection from long-press before showing modal.
     try {
@@ -823,12 +925,20 @@ async function saveEditedItem() {
     }
 
     const quantity = Math.max(1, Math.round(Number(qtyEl.value || 1)));
+    const editBasisEl = document.getElementById('editBasis');
+    const isBasis = editBasisEl instanceof HTMLInputElement ? editBasisEl.checked : false;
     try {
-        await apiPost(`api.php?endpoint=shopping.list.update_item&household_id=${encodeURIComponent(householdId || 1)}`, {
-            item_id: pendingEditItemId,
-            quantity,
-            store: pendingEditStore,
-        });
+        await Promise.all([
+            apiPost(`api.php?endpoint=shopping.list.update_item&household_id=${encodeURIComponent(householdId || 1)}`, {
+                item_id: pendingEditItemId,
+                quantity,
+                store: pendingEditStore,
+            }),
+            apiPost(`api.php?endpoint=shopping.list.set_item_basis&household_id=${encodeURIComponent(householdId || 1)}`, {
+                item_id: pendingEditItemId,
+                is_basis: isBasis,
+            }),
+        ]);
         closeEditModal();
         setStatus('addStatus', 'Varen er opdateret.');
         await refreshShopping();
@@ -1066,11 +1176,31 @@ async function addItemFromInventory(productId, name, store) {
 async function refreshShopping() {
     const payload = await apiGet(`api.php?endpoint=shopping.list&household_id=${encodeURIComponent(householdId || 1)}&_ts=${Date.now()}`);
     shoppingItems = Array.isArray(payload?.items) ? payload.items : [];
+    updateClearCheckedButton();
     renderList(shoppingItems);
     const addInput = document.getElementById('addInput');
     if (addInput instanceof HTMLInputElement && addInput.value.trim() !== '') {
         renderSuggestions(addInput.value);
     }
+}
+
+function updateClearCheckedButton() {
+    const button = document.getElementById('clearCheckedBtn');
+    if (!(button instanceof HTMLButtonElement)) {
+        return;
+    }
+
+    const checkedCount = (Array.isArray(shoppingItems) ? shoppingItems : []).filter((item) => !!item?.is_checked).length;
+    if (checkedCount <= 0) {
+        button.hidden = true;
+        button.disabled = true;
+        button.textContent = 'Ryd købte varer';
+        return;
+    }
+
+    button.hidden = false;
+    button.disabled = false;
+    button.textContent = `Ryd købte varer (${checkedCount})`;
 }
 
 async function refreshInventoryCache() {
@@ -1585,6 +1715,42 @@ document.getElementById('list')?.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
     target.click();
+});
+
+document.getElementById('fetchBasisBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('fetchBasisBtn');
+    if (!(btn instanceof HTMLButtonElement)) return;
+    btn.disabled = true;
+    btn.textContent = 'Henter...';
+    try {
+        const res = await apiPost(`api.php?endpoint=shopping.list.fetch_basis_low&household_id=${encodeURIComponent(householdId || 1)}`, {});
+        setStatus('addStatus', res?.message || 'Færdig');
+        await refreshShopping();
+    } catch (e) {
+        setStatus('addStatus', 'Fejl: ' + String(e?.message || e), true);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Hent basisvarer';
+    }
+});
+
+document.getElementById('clearCheckedBtn')?.addEventListener('click', async () => {
+    const checkedCount = (Array.isArray(shoppingItems) ? shoppingItems : []).filter((item) => !!item?.is_checked).length;
+    if (checkedCount <= 0) {
+        return;
+    }
+
+    if (!window.confirm(`Fjern ${checkedCount} købte vare(r) fra listen?`)) {
+        return;
+    }
+
+    try {
+        await apiPost(`api.php?endpoint=shopping.list.clear_checked&household_id=${encodeURIComponent(householdId || 1)}`, {});
+        setStatus('addStatus', 'Købte varer er ryddet fra listen.');
+        await refreshShopping();
+    } catch (e) {
+        setStatus('addStatus', 'Kunne ikke rydde købte varer: ' + String(e?.message || e), true);
+    }
 });
 
 document.getElementById('offerModalDismiss')?.addEventListener('click', () => {

@@ -309,7 +309,7 @@ declare(strict_types=1);
         </div>
 
         <div class="row">
-            <input id="manualBarcode" type="text" inputmode="numeric" placeholder="Manuel stregkode">
+            <input id="manualBarcode" type="text" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="Manuel stregkode">
             <button id="manualSend" class="btn-primary" type="button">Scan</button>
         </div>
 
@@ -647,7 +647,7 @@ async function refreshInventory(highlightBc = null) {
             const meta = [place, 'min ' + min].filter(Boolean).join(' · ');
             const bc = esc(String(p?.barcode || ''));
             const basisPill = isBasis ? '<span class="basis-pill">Basisvare</span>' : '';
-            return `<li class="item" data-product-id="${Number(p?.id || 0)}" data-location-id="${Number(p?.location_id || 0)}" data-qty="${qty}" data-min-qty="${min}" data-is-basis="${isBasis ? 1 : 0}" data-barcode="${bc}"><div class="swipe-delete-wrap"><button class="swipe-delete-btn" type="button" aria-label="Slet vare">Slet</button></div><div class="item-main"><div><p class="name">${esc(name)}</p><p class="meta">${esc(meta)}</p>${basisPill}</div><div class="qty">${esc(String(qty))}</div></div></li>`;
+            return `<li class="item" data-product-id="${Number(p?.id || 0)}" data-location-id="${Number(p?.location_id || 0)}" data-qty="${qty}" data-min-qty="${min}" data-is-basis="${isBasis ? 1 : 0}" data-barcode="${bc}"><div class="swipe-delete-wrap"><button class="swipe-delete-btn" type="button" aria-label="Slet vare">Slet</button></div><div class="item-main"><div><p class="name">${esc(name)}</p><p class="meta">${esc(meta)}</p>${basisPill}</div>${isBasis ? `<div class="qty">${esc(String(qty))}</div>` : ''}</div></li>`;
         }).join('');
 
     // Re-apply active search filter after list rebuild
@@ -985,9 +985,12 @@ async function scanLoop() {
     try {
         const codes = await detector.detect(video);
         if (Array.isArray(codes) && codes.length) {
-            const raw = String(codes[0]?.rawValue || '').trim();
-            if (raw.length >= 4) {
-                await postScan(raw);
+            for (const entry of codes) {
+                const raw = String(entry?.rawValue || '').trim();
+                if (raw.length >= 3) {
+                    await postScan(raw);
+                    break;
+                }
             }
         }
     } catch (_) {}
@@ -1013,7 +1016,12 @@ async function startCamera() {
         }
     }
 
-    detector = new BarcodeDetector({formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128']});
+    const preferredFormats = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'code_93', 'codabar', 'itf'];
+    try {
+        detector = new BarcodeDetector({formats: preferredFormats});
+    } catch (_) {
+        detector = new BarcodeDetector();
+    }
     stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: {
@@ -1026,7 +1034,7 @@ async function startCamera() {
     video.srcObject = stream;
     await video.play();
     scanning = true;
-    setStatus('scanStatus', 'Kamera aktivt. Ret stregkoden mod kameraet.');
+    setStatus('scanStatus', 'Kamera aktivt. Ret stregkoden mod kameraet. Virker det ikke, brug manuel stregkodefelt.');
     if (rafId) cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(scanLoop);
 }

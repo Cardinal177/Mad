@@ -81,6 +81,11 @@ try {
         exit;
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'shopping.list.set_item_basis') {
+        handleShoppingListSetItemBasis($pdo);
+        exit;
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'shopping.list.apply_offer') {
         handleShoppingListApplyOffer($pdo);
         exit;
@@ -93,6 +98,16 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'shopping.list.remove_item') {
         handleShoppingListRemoveItem($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'shopping.list.clear_checked') {
+        handleShoppingListClearChecked($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'shopping.list.fetch_basis_low') {
+        handleShoppingListFetchBasisLow($pdo);
         exit;
     }
 
@@ -246,9 +261,11 @@ try {
             '/api.php?endpoint=shopping.offer_feed' => 'GET all scraped leaflet offers (also unmatched products)',
             '/api.php?endpoint=shopping.list.add_items' => 'POST add items to active shopping list from leaflet offers',
             '/api.php?endpoint=shopping.list.set_item_checked' => 'POST set checked/unchecked state for a shopping list item',
+            '/api.php?endpoint=shopping.list.set_item_basis' => 'POST set basis flag for a shopping list item/product',
             '/api.php?endpoint=shopping.list.apply_offer' => 'POST apply one specific leaflet offer to a shopping list item',
             '/api.php?endpoint=shopping.list.update_item' => 'POST update quantity and preferred store for a shopping list item',
             '/api.php?endpoint=shopping.list.remove_item' => 'POST remove one shopping list item',
+            '/api.php?endpoint=shopping.list.clear_checked' => 'POST remove all checked items from active shopping list',
             '/api.php?endpoint=auth.request_code' => 'POST request 2FA code by initials',
             '/api.php?endpoint=auth.verify_code' => 'POST verify 2FA code and issue access token',
             '/api.php?endpoint=auth.me' => 'GET current user from bearer token',
