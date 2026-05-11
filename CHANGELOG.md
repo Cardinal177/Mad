@@ -1,5 +1,60 @@
 # Changelog
 
+## [0.2.19] - 2026-05-11 20:38
+
+### Changed
+- Show basis marker as a compact inline "B" badge to the right of item names in mobile Lager list
+
+## [0.2.18] - 2026-05-11 20:36
+
+### Changed
+- Remove the extra bottom login/logout button from mobile Lager and Indkøb pages
+
+## [0.2.17] - 2026-05-11 20:34
+
+### Changed
+- Hide mobile scan section while search input is focused to keep inventory results visible above the keyboard
+
+## [0.2.16] - 2026-05-11 20:31
+
+### Changed
+- Make mobile inventory camera section compact with one Scan vare toggle button that starts scanning immediately
+
+## [0.2.15] - 2026-05-11 20:28
+
+### Changed
+- Remove confirmation dialog when using mobile swipe action to set inventory quantity to 0
+
+## [0.2.14] - 2026-05-11 20:27
+
+### Changed
+- Change mobile inventory left-swipe action from delete to set quantity to 0, keeping products for future shopping suggestions
+
+## [0.2.13] - 2026-05-11 20:23
+
+### Changed
+- Show quantity for standard inventory items in both mobile and live inventory views
+
+## [0.2.12] - 2026-05-11 20:21
+
+### Changed
+- Reverse inventory quantity when a shopping item is changed from bought to not bought, preventing accidental stock inflation
+
+## [0.2.11] - 2026-05-11 20:16
+
+### Changed
+- Make shopping suggestion selection focus quantity input before adding, and always show quantity on shopping list rows
+
+## [0.2.10] - 2026-05-11 20:12
+
+### Changed
+- Restore shopping suggestions for out-of-stock items by allowing products endpoint include_zero mode for autocomplete cache
+
+## [0.2.9] - 2026-05-11 20:09
+
+### Changed
+- Ensure lagerlister hides varer with 0 quantity (API + mobile/live rendering) and allow shopping checked items to increase both standard and basis inventory rows
+
 ## [0.2.8] - 2026-05-06 18:58
 
 ### Changed

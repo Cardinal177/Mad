@@ -725,6 +725,7 @@ function handleProductList(PDO $pdo): void
     $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
     $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
     $locationId = isset($_GET['location_id']) ? (int) $_GET['location_id'] : null;
+    $includeZero = !empty($_GET['include_zero']) ? 1 : 0;
 
     try {
         $productTypeSelect = scanProductsHasColumn($pdo, 'product_type')
@@ -808,10 +809,11 @@ function handleProductList(PDO $pdo): void
                  ) latest ON latest.max_id = so.id
              ) promo_offer ON promo_offer.product_id = p.id
              WHERE hi.household_id = ?
+                             AND (? = 1 OR ROUND(hi.quantity, 2) > 0)
                AND (? IS NULL OR hi.location_id = ?)
              ORDER BY p.name ASC'
         );
-        $stmt->execute([$householdId, $locationId, $locationId]);
+                $stmt->execute([$householdId, $includeZero, $locationId, $locationId]);
         $products = $stmt->fetchAll();
 
         response(200, [
@@ -2171,6 +2173,7 @@ function handleShoppingListSetItemChecked(PDO $pdo): void
 
         $inventoryUpdated = false;
         $inventoryQuantityAdded = 0.0;
+        $inventoryQuantityDelta = 0.0;
         $inventoryProductId = isset($itemRow['product_id']) ? (int) $itemRow['product_id'] : 0;
         $itemProductName = trim((string) ($itemRow['product_name'] ?? ''));
 
@@ -2202,33 +2205,82 @@ function handleShoppingListSetItemChecked(PDO $pdo): void
             }
         }
 
-        // Only add to inventory on transition from unchecked -> checked, and only for basis items.
+        // Sync inventory with shopping checkbox transitions:
+        // unchecked -> checked: add quantity
+        // checked -> unchecked: subtract quantity (floored at zero)
         $inventorySkippedReason = null;
-        if ($isChecked === 1 && $wasChecked === 0 && $inventoryProductId > 0) {
-            $quantityToAdd = (float) ($itemRow['quantity'] ?? 1);
-            if ($quantityToAdd < 1) {
-                $quantityToAdd = 1.0;
+        if ($stateChanged && $inventoryProductId > 0) {
+            $quantityToAdjust = (float) ($itemRow['quantity'] ?? 1);
+            if ($quantityToAdjust < 1) {
+                $quantityToAdjust = 1.0;
             }
 
-            $basisInventoryStmt = $pdo->prepare(
-                'SELECT id, location_id, quantity
+            $inventoryStmt = $pdo->prepare(
+                'SELECT id, location_id, quantity, is_basis
                  FROM household_inventory
                  WHERE household_id = ?
                    AND product_id = ?
-                   AND is_basis = 1
-                 ORDER BY id ASC
+                 ORDER BY is_basis DESC, id ASC
                  LIMIT 1'
             );
-            $basisInventoryStmt->execute([$householdId, $inventoryProductId]);
-            $basisInventoryRow = $basisInventoryStmt->fetch();
+            $inventoryStmt->execute([$householdId, $inventoryProductId]);
+            $inventoryRow = $inventoryStmt->fetch();
 
-            if ($basisInventoryRow) {
-                $locationId = (int) ($basisInventoryRow['location_id'] ?? 0);
-                $newQuantity = (float) ($basisInventoryRow['quantity'] ?? 0) + $quantityToAdd;
+            $locationId = 0;
+            if ($isChecked === 1 && $wasChecked === 0 && $inventoryRow) {
+                $locationId = (int) ($inventoryRow['location_id'] ?? 0);
+                $newQuantity = (float) ($inventoryRow['quantity'] ?? 0) + $quantityToAdjust;
 
                 $updateInventoryStmt = $pdo->prepare('UPDATE household_inventory SET quantity = ? WHERE id = ?');
-                $updateInventoryStmt->execute([$newQuantity, (int) $basisInventoryRow['id']]);
+                $updateInventoryStmt->execute([$newQuantity, (int) $inventoryRow['id']]);
+                $inventoryQuantityDelta = $quantityToAdjust;
+            } elseif ($isChecked === 1 && $wasChecked === 0) {
+                $fallbackLocationStmt = $pdo->prepare(
+                    'SELECT id
+                     FROM household_locations
+                     WHERE household_id = ?
+                     ORDER BY id ASC
+                     LIMIT 1'
+                );
+                $fallbackLocationStmt->execute([$householdId]);
+                $fallbackLocation = $fallbackLocationStmt->fetch();
 
+                if (!$fallbackLocation) {
+                    $inventorySkippedReason = 'missing_location';
+                } else {
+                    $locationId = (int) ($fallbackLocation['id'] ?? 0);
+                    $insertInventoryStmt = $pdo->prepare(
+                        'INSERT INTO household_inventory (household_id, location_id, product_id, quantity, minimum_quantity, is_basis)
+                         VALUES (?, ?, ?, ?, ?, ?)'
+                    );
+                    $insertInventoryStmt->execute([
+                        $householdId,
+                        $locationId,
+                        $inventoryProductId,
+                        $quantityToAdjust,
+                        0,
+                        0,
+                    ]);
+                    $inventoryQuantityDelta = $quantityToAdjust;
+                }
+            } elseif ($isChecked === 0 && $wasChecked === 1 && $inventoryRow) {
+                $locationId = (int) ($inventoryRow['location_id'] ?? 0);
+                $currentQuantity = (float) ($inventoryRow['quantity'] ?? 0);
+                $newQuantity = max(0.0, $currentQuantity - $quantityToAdjust);
+                $actualSubtracted = max(0.0, $currentQuantity - $newQuantity);
+
+                if ($actualSubtracted > 0) {
+                    $updateInventoryStmt = $pdo->prepare('UPDATE household_inventory SET quantity = ? WHERE id = ?');
+                    $updateInventoryStmt->execute([$newQuantity, (int) $inventoryRow['id']]);
+                    $inventoryQuantityDelta = -$actualSubtracted;
+                } else {
+                    $inventorySkippedReason = 'already_zero';
+                }
+            } elseif ($isChecked === 0 && $wasChecked === 1) {
+                $inventorySkippedReason = 'missing_inventory';
+            }
+
+            if ($inventorySkippedReason === null && $inventoryQuantityDelta !== 0.0) {
                 $movementStmt = $pdo->prepare(
                     'INSERT INTO inventory_movements (household_id, location_id, product_id, user_id, movement_type, quantity_delta, source)
                      VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -2238,17 +2290,15 @@ function handleShoppingListSetItemChecked(PDO $pdo): void
                     $locationId > 0 ? $locationId : null,
                     $inventoryProductId,
                     isset($session['user_id']) ? (int) $session['user_id'] : null,
-                    'in',
-                    $quantityToAdd,
+                    $inventoryQuantityDelta > 0 ? 'in' : 'out',
+                    abs($inventoryQuantityDelta),
                     'manual',
                 ]);
 
                 $inventoryUpdated = true;
-                $inventoryQuantityAdded = $quantityToAdd;
-            } else {
-                $inventorySkippedReason = 'not_basis';
+                $inventoryQuantityAdded = $inventoryQuantityDelta;
             }
-        } elseif ($isChecked === 1 && $wasChecked === 0 && $inventoryProductId <= 0) {
+        } elseif ($stateChanged && $inventoryProductId <= 0) {
             $inventorySkippedReason = 'missing_product';
         }
 
@@ -2262,6 +2312,7 @@ function handleShoppingListSetItemChecked(PDO $pdo): void
             'inventory_updated' => $inventoryUpdated,
             'inventory_product_id' => $inventoryProductId > 0 ? $inventoryProductId : null,
             'inventory_quantity_added' => $inventoryQuantityAdded,
+            'inventory_quantity_delta' => $inventoryQuantityDelta,
             'inventory_skipped_reason' => $inventorySkippedReason,
         ]);
     } catch (Throwable $e) {

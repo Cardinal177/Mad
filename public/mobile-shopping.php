@@ -1,5 +1,8 @@
 <?php
 declare(strict_types=1);
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 ?><!doctype html>
 <html lang="da">
 <head>
@@ -450,16 +453,6 @@ declare(strict_types=1);
     </style>
 </head>
 <body>
-<script>
-// Pre-hide gate immediately if token exists — prevents login flash on tab switch
-(function(){
-    try {
-        if (window.localStorage.getItem('madAccessToken')) {
-            document.write('<style>#authGate{display:none!important}#app{aria-hidden:false}</style>');
-        }
-    } catch(_){}
-})();
-</script>
 <div id="authGate" class="auth-gate">
     <div class="auth-card">
         <h2>Log ind</h2>
@@ -477,7 +470,7 @@ declare(strict_types=1);
     <header class="top">
         <div class="top-head">
             <h1>Mobil indkøbsseddel</h1>
-            <button id="logoutBtn" class="logout-btn" type="button">Log ud</button>
+            <button id="logoutBtn" class="logout-btn" type="button">Log ind</button>
         </div>
         <p class="sub" id="who">Henter session...</p>
     </header>
@@ -574,6 +567,8 @@ let shoppingAutoRefreshInFlight = false;
 let pendingOfferSelection = null;
 let pendingEditItemId = 0;
 let pendingEditStore = '';
+let selectedSuggestionProduct = null;
+const REQUEST_TIMEOUT_MS = 12000;
 
 function authHeaders() {
     const headers = {'Content-Type': 'application/json'};
@@ -599,8 +594,26 @@ function setStatus(elId, text, isErr = false) {
     el.classList.toggle('err', !!isErr);
 }
 
+async function fetchWithTimeout(url, options = {}) {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+        return await fetch(url, {
+            ...options,
+            signal: controller.signal,
+        });
+    } catch (err) {
+        if (err && err.name === 'AbortError') {
+            throw new Error('Forbindelsen fik timeout. Prøv igen.');
+        }
+        throw err;
+    } finally {
+        window.clearTimeout(timeoutId);
+    }
+}
+
 async function apiGet(url) {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
         headers: authHeaders(),
         cache: 'no-store',
     });
@@ -617,7 +630,7 @@ async function apiGet(url) {
 }
 
 async function apiPost(url, payload) {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify(payload || {}),
@@ -635,11 +648,33 @@ async function apiPost(url, payload) {
 }
 
 function lockApp() {
-    document.getElementById('authGate')?.classList.remove('hidden');
+    const gate = document.getElementById('authGate');
+    gate?.classList.remove('hidden');
+    if (gate instanceof HTMLElement) {
+        gate.style.setProperty('display', 'flex', 'important');
+    }
     const app = document.getElementById('app');
     if (app) {
         app.setAttribute('aria-hidden', 'true');
         app.setAttribute('inert', '');
+    }
+    syncAuthButtons(false);
+}
+
+function syncAuthButtons(isLoggedIn) {
+    const label = isLoggedIn ? 'Log ud' : 'Log ind';
+    const topBtn = document.getElementById('logoutBtn');
+    const navBtn = document.getElementById('navLogoutBtn');
+    if (topBtn) topBtn.textContent = label;
+    if (navBtn) navBtn.textContent = label;
+}
+
+function openLoginPrompt() {
+    lockApp();
+    const initialsInput = document.getElementById('gateInitials');
+    if (initialsInput instanceof HTMLInputElement) {
+        initialsInput.focus();
+        initialsInput.select();
     }
 }
 
@@ -663,16 +698,30 @@ function logoutApp() {
         who.textContent = 'Ikke logget ind';
     }
     setStatus('gateStatus', 'Logget ud. Skriv initialer for ny kode.');
-    lockApp();
+    openLoginPrompt();
 }
 
 function unlockApp() {
-    document.getElementById('authGate')?.classList.add('hidden');
+    if (!accessToken) {
+        lockApp();
+        return;
+    }
+    const gate = document.getElementById('authGate');
+    gate?.classList.add('hidden');
+    if (gate instanceof HTMLElement) {
+        gate.style.removeProperty('display');
+    }
     const app = document.getElementById('app');
     if (app) {
         app.setAttribute('aria-hidden', 'false');
         app.removeAttribute('inert');
     }
+    syncAuthButtons(true);
+}
+
+if (accessToken) {
+    // Keep controls responsive while session validation runs.
+    unlockApp();
 }
 
 function normalizeSearchText(v) {
@@ -832,9 +881,7 @@ function renderList(items) {
         const visibleStore = isSuggestion ? '' : String(item?.preferred_store || item?.offer_store || '').trim();
         const hasVisiblePrice = !isSuggestion && item?.offer_price !== null && item?.offer_price !== undefined && !Number.isNaN(Number(item.offer_price));
         const visiblePrice = hasVisiblePrice ? Number(item.offer_price).toFixed(2).replace('.', ',') + ' kr' : '-';
-        const quantityMeta = isBasis
-            ? `Antal: ${Number.isInteger(quantity) ? quantity : quantity.toString().replace('.', ',')} · `
-            : '';
+        const quantityMeta = `Antal: ${Number.isInteger(quantity) ? quantity : quantity.toString().replace('.', ',')} · `;
         const meta = quantityMeta + `Pris: ${visiblePrice}`
             + ` · Butik: ${visibleStore || '-'}`;
         const offerStore = String(item?.offer_store || visibleStore || '').trim();
@@ -1204,7 +1251,7 @@ function updateClearCheckedButton() {
 }
 
 async function refreshInventoryCache() {
-    const payload = await apiGet(`api.php?endpoint=products&household_id=${encodeURIComponent(householdId || 1)}`);
+    const payload = await apiGet(`api.php?endpoint=products&household_id=${encodeURIComponent(householdId || 1)}&include_zero=1`);
     inventoryProducts = Array.isArray(payload?.products) ? payload.products : [];
     const addInput = document.getElementById('addInput');
     if (addInput instanceof HTMLInputElement && addInput.value.trim() !== '') {
@@ -1461,6 +1508,10 @@ async function bootstrap() {
     try {
         await resolveSession();
         await Promise.all([refreshShopping(), refreshInventoryCache()]);
+        if (!accessToken) {
+            lockApp();
+            return;
+        }
         unlockApp();
     } catch (e) {
         lockApp();
@@ -1567,12 +1618,64 @@ gateCodeInput?.addEventListener('input', async () => {
 });
 
 document.getElementById('logoutBtn')?.addEventListener('click', () => {
-    logoutApp();
+    if (accessToken) {
+        logoutApp();
+    } else {
+        openLoginPrompt();
+    }
 });
+
+document.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const btn = target.closest('#logoutBtn');
+    if (!(btn instanceof HTMLElement)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (accessToken) {
+        logoutApp();
+    } else {
+        openLoginPrompt();
+    }
+});
+
+document.addEventListener('touchend', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const btn = target.closest('#logoutBtn');
+    if (!(btn instanceof HTMLElement)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (accessToken) {
+        logoutApp();
+    } else {
+        openLoginPrompt();
+    }
+}, {passive: false});
 
 const addInput = document.getElementById('addInput');
 const addBtn = document.getElementById('addBtn');
 const suggestions = document.getElementById('suggestions');
+const addQtyInput = document.getElementById('addQty');
+
+function selectInventorySuggestion(productId, name, store) {
+    const suggestionName = String(name || '').trim();
+    if (!suggestionName || !addInput) return;
+    selectedSuggestionProduct = {
+        productId: Number(productId || 0),
+        name: suggestionName,
+        store: String(store || '').trim(),
+    };
+    addInput.value = suggestionName;
+    if (suggestions) {
+        suggestions.style.display = 'none';
+        suggestions.innerHTML = '';
+    }
+    if (addQtyInput instanceof HTMLInputElement) {
+        addQtyInput.focus();
+        addQtyInput.select();
+    }
+}
 
 addBtn?.addEventListener('click', async () => {
     if (!addInput) return;
@@ -1580,7 +1683,18 @@ addBtn?.addEventListener('click', async () => {
     if (!name) return;
     addBtn.disabled = true;
     try {
-        await addItemByText(name);
+        const useSuggestion = !!selectedSuggestionProduct
+            && normalizeSearchText(selectedSuggestionProduct.name) === normalizeSearchText(name);
+        if (useSuggestion) {
+            await addItemFromInventory(
+                Number(selectedSuggestionProduct.productId || 0),
+                selectedSuggestionProduct.name,
+                selectedSuggestionProduct.store
+            );
+        } else {
+            await addItemByText(name);
+        }
+        selectedSuggestionProduct = null;
         addInput.value = '';
         if (suggestions) {
             suggestions.style.display = 'none';
@@ -1597,6 +1711,7 @@ addBtn?.addEventListener('click', async () => {
 });
 
 addInput?.addEventListener('input', async () => {
+    selectedSuggestionProduct = null;
     if (!inventoryProducts.length && (addInput.value || '').trim().length >= 2) {
         try {
             await refreshInventoryCache();
@@ -1636,23 +1751,19 @@ suggestions?.addEventListener('click', async (event) => {
     const row = t.closest('[data-action="add-sg"]');
     if (!(row instanceof HTMLElement)) return;
 
+    const existing = row.dataset.existing === '1';
+    if (existing) {
+        setStatus('addStatus', 'Varen er allerede på indkøbssedlen.');
+        return;
+    }
+
     const productId = Number(row.dataset.id || 0);
     const name = String(row.dataset.name || '').trim();
     const store = String(row.dataset.store || '').trim();
     if (!name) return;
 
-    try {
-        await addItemFromInventory(productId, name, store);
-        if (addInput) addInput.value = '';
-        if (suggestions) {
-            suggestions.style.display = 'none';
-            suggestions.innerHTML = '';
-        }
-        setStatus('addStatus', 'Vare tilføjet fra lager.');
-        await refreshShopping();
-    } catch (e) {
-        setStatus('addStatus', 'Kunne ikke tilføje fra lager: ' + String(e?.message || e), true);
-    }
+    selectInventorySuggestion(productId, name, store);
+    setStatus('addStatus', 'Forslag valgt. Angiv antal og tryk Tilføj.');
 });
 
 document.getElementById('list')?.addEventListener('click', async (event) => {

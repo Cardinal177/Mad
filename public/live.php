@@ -2471,6 +2471,9 @@ function formatQuantity(value) {
     if (Number.isNaN(quantity)) {
         return '0';
     }
+    if (quantity > 0 && quantity < 0.1) {
+        return '<0,1';
+    }
     return Number.isInteger(quantity) ? String(quantity) : quantity.toFixed(1);
 }
 
@@ -2593,13 +2596,14 @@ function stateForProduct(product) {
 
 function renderProducts(products) {
     const body = document.getElementById('productsBody');
+    const visibleProducts = (Array.isArray(products) ? products : []).filter((product) => Math.round(Number(product?.quantity ?? 0) * 100) > 0);
 
-    if (!products.length) {
+    if (!visibleProducts.length) {
         body.innerHTML = '<div class="empty">Ingen produkter endnu. Når scanner eller HMI begynder at oprette varer, dukker lagerkortene op her.</div>';
         return;
     }
 
-    body.innerHTML = products.map(product => {
+    body.innerHTML = visibleProducts.map(product => {
         const state = stateForProduct(product);
         const nutrition = nutritionForProduct(product);
         const image = product.image_url ? `<img class="inventory-image" src="${esc(product.image_url)}" alt="${esc(product.name || 'Varebillede')}">` : `<div class="inventory-image-fallback">${esc((product.name || 'M').slice(0, 1).toUpperCase())}</div>`;
@@ -2675,7 +2679,7 @@ function renderProducts(products) {
                 </div>
                 <div class="inventory-qty-col">
                     <span class="state-badge ${state.className}" style="margin-bottom:2px">${esc(state.label)}</span>
-                    ${isBasis ? `<span class="inventory-qty-main" data-field="quantity">${esc(formatQuantity(product.quantity ?? 0))}</span>` : ''}
+                    <span class="inventory-qty-main" data-field="quantity">${esc(formatQuantity(product.quantity ?? 0))}</span>
                     ${isBasis ? `<span class="inventory-qty-min">min ${esc(formatQuantity(product.minimum_quantity ?? 0))}</span>` : ''}
                 </div>
             </div>
@@ -5374,9 +5378,10 @@ async function refresh() {
         const scans = recent.scans || [];
         const productList = products.products || [];
         inventoryProductsCache = Array.isArray(productList) ? productList : [];
-        const lowStock = productList.filter(product => Number(product.quantity ?? 0) <= Number(product.minimum_quantity ?? 0)).length;
+        const inStockProductList = productList.filter(product => Number(product.quantity ?? 0) > 0);
+        const lowStock = inStockProductList.filter(product => Number(product.quantity ?? 0) <= Number(product.minimum_quantity ?? 0)).length;
         const latest = scans[0] || null;
-        const balanced = Math.max(productList.length - lowStock, 0);
+        const balanced = Math.max(inStockProductList.length - lowStock, 0);
         const leafletOffersWithoutNetto = (offerFeed.items || []).filter(item => {
             const storeName = String(item?.store_name || '').trim().toLowerCase();
             return storeName !== 'netto'
@@ -5391,7 +5396,7 @@ async function refresh() {
 
         void syncDeviceScanContext(true);
         renderScans(scans);
-        renderProducts(productList);
+        renderProducts(inStockProductList);
         initInventoryCardActions();
         initInventoryShoppingSearch();
         initInventoryScanActions();
@@ -5400,7 +5405,7 @@ async function refresh() {
         renderLeafletOfferFeed(leafletOffersWithoutNetto, offerFeed.items || []);
 
         document.getElementById('scanCount').textContent = String(scans.length);
-        document.getElementById('productCount').textContent = String(productList.length);
+        document.getElementById('productCount').textContent = String(inStockProductList.length);
         document.getElementById('lowStockCount').textContent = String(lowStock);
         document.getElementById('activityChip').textContent = `${scans.length} hændelser`;
         document.getElementById('inventoryChip').textContent = `${balanced} i balance`;
@@ -5413,12 +5418,12 @@ async function refresh() {
         if (leafletOffersChip) {
             leafletOffersChip.textContent = `${leafletOffersWithoutNetto.length} fundet`;
         }
-        document.getElementById('planChip').textContent = `${productList.length ? 'Klar til ugeblik' : 'Afventer varer'}`;
+        document.getElementById('planChip').textContent = `${inStockProductList.length ? 'Klar til ugeblik' : 'Afventer varer'}`;
         document.getElementById('attentionItemsValue').textContent = String(lowStock);
         document.getElementById('scanSummary').textContent = scans.length ? 'Scanlog findes stadig, men er gjort diskret.' : 'Scannerflowet er klar, men ligger i baggrunden indtil der er brug for det.';
-        document.getElementById('productSummary').textContent = productList.length ? 'Fødevarer vises som husstandens kort med lagerstatus og ernæring, når data findes.' : 'Ingen varer er endnu blevet oprettet i lageret.';
+        document.getElementById('productSummary').textContent = inStockProductList.length ? 'Fødevarer vises som husstandens kort med lagerstatus og ernæring, når data findes.' : 'Ingen varer med beholdning over 0 vises i lageret.';
         document.getElementById('lowStockSummary').textContent = lowStock ? 'Varer under eller ved minimum bør være næste fokus i indkøb.' : 'Ingen varer presser minimumsgrænsen lige nu.';
-        document.getElementById('heroSummaryValue').textContent = `${productList.length} varer`;
+        document.getElementById('heroSummaryValue').textContent = `${inStockProductList.length} varer`;
         document.getElementById('heroSummaryMeta').textContent = lowStock ? `${lowStock} varer kræver snart opmærksomhed i ${document.getElementById('householdLabel').textContent}.` : 'Lageret ser stabilt og mindre teknisk ud lige nu.';
         document.getElementById('latestMovementValue').textContent = latest ? 'Lager + plan' : 'Madplan';
         document.getElementById('latestMovementMeta').textContent = latest

@@ -1,5 +1,8 @@
 <?php
 declare(strict_types=1);
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 ?><!doctype html>
 <html lang="da">
 <head>
@@ -67,7 +70,11 @@ declare(strict_types=1);
             border: 1px solid var(--line);
             background: #111;
             aspect-ratio: 16 / 9;
-            max-height: 200px;
+            max-height: 156px;
+            display: none;
+        }
+        .camera.active {
+            display: block;
         }
         video { width: 100%; height: 100%; object-fit: cover; display: block; }
         .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
@@ -144,6 +151,11 @@ declare(strict_types=1);
             filter: brightness(0.98);
             border-color: var(--accent);
         }
+        .name-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
         .name { margin: 0; font-size: 15px; font-weight: 700; }
         .meta { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
         .qty { font-size: 14px; font-weight: 700; color: var(--accent); }
@@ -160,14 +172,16 @@ declare(strict_types=1);
             height: 16px;
         }
         .basis-pill {
-            margin-top: 4px;
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             border-radius: 999px;
             border: 1px solid rgba(47,106,86,0.35);
             background: rgba(47,106,86,0.10);
             color: var(--accent);
-            padding: 2px 8px;
+            width: 20px;
+            height: 20px;
+            padding: 0;
             font-size: 11px;
             font-weight: 700;
         }
@@ -262,20 +276,14 @@ declare(strict_types=1);
         .auth-grid input {
             text-align: center;
         }
+
+        body.searching #scanSection {
+            display: none;
+        }
     </style>
 
 </head>
 <body>
-<script>
-// Pre-hide gate immediately if token exists — prevents login flash on tab switch
-(function(){
-    try {
-        if (window.localStorage.getItem('madAccessToken')) {
-            document.write('<style>#authGate{display:none!important}#app{aria-hidden:false}</style>');
-        }
-    } catch(_){}
-})();
-</script>
 <div id="authGate" class="auth-gate">
     <div class="auth-card">
         <h2>Log ind</h2>
@@ -293,20 +301,17 @@ declare(strict_types=1);
     <header class="top">
         <div class="top-head">
             <h1>Mobil lager</h1>
-            <button id="logoutBtn" class="logout-btn" type="button">Log ud</button>
+            <button id="logoutBtn" class="logout-btn" type="button">Log ind</button>
         </div>
         <p class="sub" id="who">Henter session...</p>
     </header>
 
-    <section class="card stack" aria-label="Scanning">
+    <section id="scanSection" class="card stack" aria-label="Scanning">
         <div class="camera">
             <video id="video" playsinline muted></video>
         </div>
 
-        <div class="row">
-            <button id="cameraBtn" class="btn-primary" type="button">Start kamera</button>
-            <button id="cameraStop" type="button">Stop</button>
-        </div>
+        <button id="scanToggleBtn" class="btn-primary" type="button">Scan vare</button>
 
         <div class="row">
             <input id="manualBarcode" type="text" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="Manuel stregkode">
@@ -393,6 +398,7 @@ let pendingCreateBarcode = '';
 let pressTimer = 0;
 let pressTarget = null;
 let editTarget = null;
+const REQUEST_TIMEOUT_MS = 12000;
 
 function authHeaders() {
     const headers = {'Content-Type': 'application/json'};
@@ -434,8 +440,26 @@ function flashStatus(elId, text, isErr = false) {
     }, 3500);
 }
 
+async function fetchWithTimeout(url, options = {}) {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+        return await fetch(url, {
+            ...options,
+            signal: controller.signal,
+        });
+    } catch (err) {
+        if (err && err.name === 'AbortError') {
+            throw new Error('Forbindelsen fik timeout. Prøv igen.');
+        }
+        throw err;
+    } finally {
+        window.clearTimeout(timeoutId);
+    }
+}
+
 async function apiGet(url) {
-    const res = await fetch(url, {headers: authHeaders()});
+    const res = await fetchWithTimeout(url, {headers: authHeaders()});
     if (!res.ok) {
         let msg = 'HTTP ' + res.status;
         try {
@@ -449,7 +473,7 @@ async function apiGet(url) {
 }
 
 async function apiPost(url, payload) {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify(payload || {}),
@@ -467,11 +491,33 @@ async function apiPost(url, payload) {
 }
 
 function lockApp() {
-    document.getElementById('authGate')?.classList.remove('hidden');
+    const gate = document.getElementById('authGate');
+    gate?.classList.remove('hidden');
+    if (gate instanceof HTMLElement) {
+        gate.style.setProperty('display', 'flex', 'important');
+    }
     const app = document.getElementById('app');
     if (app) {
         app.setAttribute('aria-hidden', 'true');
         app.setAttribute('inert', '');
+    }
+    syncAuthButtons(false);
+}
+
+function syncAuthButtons(isLoggedIn) {
+    const label = isLoggedIn ? 'Log ud' : 'Log ind';
+    const topBtn = document.getElementById('logoutBtn');
+    const navBtn = document.getElementById('navLogoutBtn');
+    if (topBtn) topBtn.textContent = label;
+    if (navBtn) navBtn.textContent = label;
+}
+
+function openLoginPrompt() {
+    lockApp();
+    const initialsInput = document.getElementById('gateInitials');
+    if (initialsInput instanceof HTMLInputElement) {
+        initialsInput.focus();
+        initialsInput.select();
     }
 }
 
@@ -496,16 +542,30 @@ function logoutApp() {
         who.textContent = 'Ikke logget ind';
     }
     setStatus('gateStatus', 'Logget ud. Skriv initialer for ny kode.');
-    lockApp();
+    openLoginPrompt();
 }
 
 function unlockApp() {
-    document.getElementById('authGate')?.classList.add('hidden');
+    if (!accessToken) {
+        lockApp();
+        return;
+    }
+    const gate = document.getElementById('authGate');
+    gate?.classList.add('hidden');
+    if (gate instanceof HTMLElement) {
+        gate.style.removeProperty('display');
+    }
     const app = document.getElementById('app');
     if (app) {
         app.setAttribute('aria-hidden', 'false');
         app.removeAttribute('inert');
     }
+    syncAuthButtons(true);
+}
+
+if (accessToken) {
+    // Keep controls responsive while session validation runs.
+    unlockApp();
 }
 
 function resolveProductDisplayName(product) {
@@ -627,15 +687,16 @@ async function resolveSession() {
 async function refreshInventory(highlightBc = null) {
     const data = await apiGet(`api.php?endpoint=products&household_id=${encodeURIComponent(householdId || 1)}`);
     const products = Array.isArray(data?.products) ? data.products : [];
-    allProducts = products;
+    const inStockProducts = products.filter((p) => Math.round(Number(p?.quantity || 0) * 100) > 0);
+    allProducts = inStockProducts;
     const list = document.getElementById('list');
     const summary = document.getElementById('invSummary');
     if (summary) {
-        summary.textContent = products.length + ' varer på lager';
+        summary.textContent = inStockProducts.length + ' varer på lager';
     }
     if (!list) return;
 
-    list.innerHTML = products
+    list.innerHTML = inStockProducts
         .slice()
         .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'da'))
         .map((p) => {
@@ -646,8 +707,8 @@ async function refreshInventory(highlightBc = null) {
             const place = String(p?.location_name || '').trim();
             const meta = [place, 'min ' + min].filter(Boolean).join(' · ');
             const bc = esc(String(p?.barcode || ''));
-            const basisPill = isBasis ? '<span class="basis-pill">Basisvare</span>' : '';
-            return `<li class="item" data-product-id="${Number(p?.id || 0)}" data-location-id="${Number(p?.location_id || 0)}" data-qty="${qty}" data-min-qty="${min}" data-is-basis="${isBasis ? 1 : 0}" data-barcode="${bc}"><div class="swipe-delete-wrap"><button class="swipe-delete-btn" type="button" aria-label="Slet vare">Slet</button></div><div class="item-main"><div><p class="name">${esc(name)}</p><p class="meta">${esc(meta)}</p>${basisPill}</div>${isBasis ? `<div class="qty">${esc(String(qty))}</div>` : ''}</div></li>`;
+            const basisPill = isBasis ? '<span class="basis-pill" title="Basisvare" aria-label="Basisvare">B</span>' : '';
+            return `<li class="item" data-product-id="${Number(p?.id || 0)}" data-location-id="${Number(p?.location_id || 0)}" data-qty="${qty}" data-min-qty="${min}" data-is-basis="${isBasis ? 1 : 0}" data-barcode="${bc}"><div class="swipe-delete-wrap"><button class="swipe-delete-btn" type="button" aria-label="Sæt vare til 0">Sæt til 0</button></div><div class="item-main"><div><div class="name-row"><p class="name">${esc(name)}</p>${basisPill}</div><p class="meta">${esc(meta)}</p></div><div class="qty">${esc(String(qty))}</div></div></li>`;
         }).join('');
 
     // Re-apply active search filter after list rebuild
@@ -707,6 +768,17 @@ function highlightBarcode(code) {
             createHint.textContent = 'Varen findes ikke. Tryk "Opret vare" for at oprette ' + code + '.';
         }
         flashStatus('scanStatus', 'Ikke på lager: ' + code, true);
+    }
+}
+
+function syncScanToggleUi() {
+    const btn = document.getElementById('scanToggleBtn');
+    const cam = document.querySelector('.camera');
+    if (btn instanceof HTMLButtonElement) {
+        btn.textContent = scanning ? 'Stop scanning' : 'Scan vare';
+    }
+    if (cam instanceof HTMLElement) {
+        cam.classList.toggle('active', !!scanning);
     }
 }
 
@@ -810,17 +882,22 @@ function bindInventoryItemGestures() {
                 e.preventDefault();
                 e.stopPropagation();
                 const productId = Number(item.dataset.productId || 0);
+                const locationId = Number(item.dataset.locationId || 0);
+                const minQty = Number(item.dataset.minQty || 0);
+                const isBasis = Number(item.dataset.isBasis || 0) === 1;
                 if (!productId) return;
-                const ok = window.confirm('Slet vare fra lager?');
-                if (!ok) return;
                 try {
-                    await apiPost('api.php?endpoint=inventory.delete&household_id=' + encodeURIComponent(householdId || 1), {
+                    await apiPost('api.php?endpoint=inventory.update_item&household_id=' + encodeURIComponent(householdId || 1), {
                         product_id: productId,
+                        location_id: locationId,
+                        quantity: 0,
+                        minimum_quantity: minQty,
+                        is_basis: isBasis,
                     });
-                    flashStatus('scanStatus', 'Vare slettet fra lager.', false);
+                    flashStatus('scanStatus', 'Vare sat til 0 på lager.', false);
                     await refreshInventory();
                 } catch (err) {
-                    flashStatus('scanStatus', 'Kunne ikke slette: ' + String(err?.message || err), true);
+                    flashStatus('scanStatus', 'Kunne ikke sætte til 0: ' + String(err?.message || err), true);
                 }
             };
         }
@@ -1034,6 +1111,7 @@ async function startCamera() {
     video.srcObject = stream;
     await video.play();
     scanning = true;
+    syncScanToggleUi();
     setStatus('scanStatus', 'Kamera aktivt. Ret stregkoden mod kameraet. Virker det ikke, brug manuel stregkodefelt.');
     if (rafId) cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(scanLoop);
@@ -1054,6 +1132,7 @@ function stopCamera() {
         stream.getTracks().forEach((t) => t.stop());
         stream = null;
     }
+    syncScanToggleUi();
     setStatus('scanStatus', 'Kamera stoppet.');
 }
 
@@ -1061,6 +1140,10 @@ async function bootstrap() {
     try {
         await resolveSession();
         await refreshInventory();
+        if (!accessToken) {
+            lockApp();
+            return;
+        }
         unlockApp();
     } catch (e) {
         lockApp();
@@ -1144,18 +1227,53 @@ gateCodeInput?.addEventListener('input', async () => {
 });
 
 document.getElementById('logoutBtn')?.addEventListener('click', () => {
-    logoutApp();
+    if (accessToken) {
+        logoutApp();
+    } else {
+        openLoginPrompt();
+    }
 });
 
-document.getElementById('cameraBtn')?.addEventListener('click', async () => {
+document.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const btn = target.closest('#logoutBtn');
+    if (!(btn instanceof HTMLElement)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (accessToken) {
+        logoutApp();
+    } else {
+        openLoginPrompt();
+    }
+});
+
+document.addEventListener('touchend', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const btn = target.closest('#logoutBtn');
+    if (!(btn instanceof HTMLElement)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (accessToken) {
+        logoutApp();
+    } else {
+        openLoginPrompt();
+    }
+}, {passive: false});
+
+document.getElementById('scanToggleBtn')?.addEventListener('click', async () => {
+    if (scanning) {
+        stopCamera();
+        return;
+    }
     try {
         await startCamera();
     } catch (e) {
         setStatus('scanStatus', 'Kamera fejl: ' + String(e?.message || e), true);
+        syncScanToggleUi();
     }
 });
-
-document.getElementById('cameraStop')?.addEventListener('click', () => stopCamera());
 
 document.getElementById('manualSend')?.addEventListener('click', async () => {
     const input = document.getElementById('manualBarcode');
@@ -1213,6 +1331,17 @@ document.getElementById('searchInput')?.addEventListener('input', (e) => {
     applySearch(e.target.value);
 });
 
+document.getElementById('searchInput')?.addEventListener('focus', () => {
+    document.body.classList.add('searching');
+});
+
+document.getElementById('searchInput')?.addEventListener('blur', () => {
+    window.setTimeout(() => {
+        document.body.classList.remove('searching');
+    }, 120);
+});
+
+syncScanToggleUi();
 bootstrap();
 </script>
 </body>
