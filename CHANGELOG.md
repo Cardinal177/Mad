@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.44] - 2026-05-12 18:50
+
+### Changed
+- Upsert recipe by source URL on import to avoid stale duplicates; show imported/updated status
+
+
 ## [0.2.43] - 2026-05-12 18:46
 
 ### Changed
