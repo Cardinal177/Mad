@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.40] - 2026-05-12 18:33
+
+### Changed
+- Fix recipe extraction: anchor to raw HTML position of Ingredienser before stripping tags
+
+
 ## [0.2.39] - 2026-05-12 18:30
 
 ### Changed
