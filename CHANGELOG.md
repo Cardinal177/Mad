@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.41] - 2026-05-12 18:35
+
+### Changed
+- Fix recipe extraction: use first occurrence of Ingredienser not last
+
+
 ## [0.2.40] - 2026-05-12 18:33
 
 ### Changed
