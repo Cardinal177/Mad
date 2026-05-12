@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.38] - 2026-05-12 18:28
+
+### Changed
+- Fix recipe delete: use owner_household_id column name
+
+
 ## [0.2.37] - 2026-05-12 18:26
 
 ### Changed
