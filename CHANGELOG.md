@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.34] - 2026-05-12 18:20
+
+### Changed
+- Send raw HTML to Claude for recipe extraction instead of regex parsing
+
+
 ## [0.2.33] - 2026-05-12 17:41
 
 ### Changed
