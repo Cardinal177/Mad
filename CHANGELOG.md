@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.46] - 2026-05-12 18:56
+
+### Changed
+- Include ingredient section headers (e.g. Til servering) in microdata recipe import
+
+
 ## [0.2.45] - 2026-05-12 18:52
 
 ### Changed
