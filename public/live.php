@@ -949,6 +949,223 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             gap: 10px;
             margin-top: 14px;
         }
+        .recipe-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }
+        .recipe-thumb-card {
+            background: linear-gradient(160deg, rgba(255,252,247,0.98) 0%, rgba(236,226,212,0.7) 100%);
+            border: 1px solid rgba(20,35,29,0.09);
+            border-radius: 16px;
+            padding: 16px;
+            cursor: pointer;
+            transition: transform 0.18s, box-shadow 0.18s;
+            position: relative;
+            overflow: hidden;
+        }
+        .recipe-thumb-delete {
+            position: absolute; top: 8px; right: 8px;
+            width: 26px; height: 26px;
+            border-radius: 50%; border: none; background: rgba(0,0,0,0.12);
+            color: var(--text); font-size: 13px; line-height: 26px; text-align: center;
+            cursor: pointer; opacity: 0; transition: opacity .15s, background .15s;
+            z-index: 2; padding: 0;
+        }
+        .recipe-thumb-card:hover .recipe-thumb-delete { opacity: 1; }
+        .recipe-thumb-delete:hover { background: rgba(200,50,50,0.7); color: #fff; }
+        .recipe-thumb-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(20,35,29,0.12);
+        }
+        .recipe-thumb-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 16px;
+            border: 2px solid transparent;
+            transition: border-color 0.18s;
+        }
+        .recipe-thumb-card:hover::after {
+            border-color: rgba(47,106,86,0.25);
+        }
+        .recipe-thumb-emoji {
+            font-size: 32px;
+            margin-bottom: 10px;
+            display: block;
+        }
+        .recipe-thumb-title {
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1.3;
+            margin: 0 0 6px;
+            color: var(--text);
+        }
+        .recipe-thumb-meta {
+            font-size: 11px;
+            color: var(--muted);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .recipe-thumb-tag {
+            background: rgba(47,106,86,0.1);
+            color: var(--accent);
+            border-radius: 999px;
+            padding: 2px 7px;
+            font-size: 10px;
+            font-weight: 700;
+        }
+        /* Recipe modal */
+        .recipe-modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            background: rgba(14,24,20,0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 0;
+        }
+        @media (min-width: 640px) {
+            .recipe-modal-overlay {
+                align-items: center;
+                padding: 20px;
+            }
+        }
+        .recipe-modal {
+            background: var(--panel-strong);
+            border-radius: 20px 20px 0 0;
+            width: 100%;
+            max-width: 680px;
+            max-height: 92vh;
+            overflow-y: auto;
+            padding: 24px 20px 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        @media (min-width: 640px) {
+            .recipe-modal {
+                border-radius: 20px;
+                padding: 28px 28px 32px;
+            }
+        }
+        .recipe-modal-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .recipe-modal-title {
+            font-size: 22px;
+            font-weight: 800;
+            margin: 0;
+            line-height: 1.2;
+        }
+        .recipe-modal-close {
+            border: 0;
+            background: rgba(20,35,29,0.08);
+            border-radius: 999px;
+            width: 32px;
+            height: 32px;
+            font-size: 18px;
+            cursor: pointer;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text);
+        }
+        .recipe-modal-desc {
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.55;
+            margin: 0;
+        }
+        .recipe-modal-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .recipe-stat-chip {
+            background: rgba(236,226,212,0.7);
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 12px;
+            line-height: 1.2;
+        }
+        .recipe-stat-chip strong {
+            display: block;
+            font-size: 16px;
+        }
+        .recipe-modal-section-title {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin: 0 0 10px;
+        }
+        .recipe-modal-ingredients {
+            background: rgba(255,255,255,0.6);
+            border: 1px solid rgba(20,35,29,0.07);
+            border-radius: 14px;
+            overflow: hidden;
+        }
+        .recipe-ingredient-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 9px 14px;
+            border-bottom: 1px solid rgba(20,35,29,0.06);
+            font-size: 14px;
+        }
+        .recipe-ingredient-row:last-child {
+            border-bottom: 0;
+        }
+        .recipe-ingredient-name {
+            font-weight: 600;
+        }
+        .recipe-ingredient-qty {
+            color: var(--muted);
+            font-size: 13px;
+        }
+        .recipe-modal-steps {
+            display: grid;
+            gap: 8px;
+        }
+        .recipe-step-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+        .recipe-step-num {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            font-size: 12px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+        .recipe-step-text {
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text);
+        }
+        .recipe-modal-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding-top: 4px;
+        }
         .recipe-line {
             display: flex;
             justify-content: space-between;
@@ -1242,6 +1459,59 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             align-items: start;
             margin-bottom: 24px;
         }
+        .offer-feed-status {
+            margin: 4px 0 16px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid var(--line);
+            background: linear-gradient(135deg, rgba(255,255,255,0.86), rgba(246,238,227,0.88));
+        }
+        .offer-feed-status-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .offer-feed-status-title {
+            margin: 0;
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--accent);
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+        .offer-feed-status-time {
+            font-size: 11px;
+            color: var(--muted);
+        }
+        .offer-feed-status-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .offer-feed-status-pill {
+            border-radius: 10px;
+            border: 1px solid rgba(20,35,29,0.08);
+            background: rgba(255,255,255,0.74);
+            padding: 8px 10px;
+            display: grid;
+            gap: 2px;
+        }
+        .offer-feed-status-pill strong {
+            font-size: 16px;
+            line-height: 1;
+            color: var(--text);
+        }
+        .offer-feed-status-pill span {
+            font-size: 11px;
+            color: var(--muted);
+        }
+        .offer-feed-status-note {
+            margin-top: 8px;
+            font-size: 11px;
+            color: var(--muted);
+        }
         .search-container {
             position: relative;
             display: flex;
@@ -1284,6 +1554,14 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             .shopping-layout {
                 grid-template-columns: 1fr;
             }
+            .offer-feed-status-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        @media (max-width: 640px) {
+            .offer-feed-status-grid {
+                grid-template-columns: 1fr;
+            }
         }
         .inventory-badges {
             display: flex;
@@ -1323,6 +1601,38 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             list-style: none;
             margin: 0;
             padding: 0;
+        }
+        .leaflet-offer-card {
+            padding: 10px 12px;
+        }
+        .leaflet-offer-card .inventory-top {
+            padding-right: 28px;
+        }
+        .leaflet-offer-card .inventory-name {
+            font-size: 13px;
+            line-height: 1.2;
+        }
+        .leaflet-offer-card .inventory-brand {
+            font-size: 10px;
+        }
+        .leaflet-offer-card .nutrition-note {
+            margin-top: 6px;
+            font-size: 11px;
+        }
+        .leaflet-nutrition-strip {
+            margin-top: 8px;
+            gap: 6px;
+        }
+        .leaflet-chip {
+            padding: 8px;
+            border-radius: 10px;
+        }
+        .leaflet-chip strong {
+            font-size: 13px;
+        }
+        .leaflet-chip span {
+            margin-top: 2px;
+            font-size: 10px;
         }
         .shopping-row {
             display: grid;
@@ -1770,6 +2080,15 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                     </div>
                 </article>
             </div>
+
+            <!-- Meal Plan Grid -->
+            <div style="margin-top:24px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <h3 style="margin:0; font-size:16px;">Denne uge</h3>
+                    <button class="admin-button alt" type="button" id="mealPlanRefreshBtn" style="padding:6px 10px; font-size:11px;">Genindlæs</button>
+                </div>
+                <div id="mealPlanContainer" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px; margin-bottom:16px;"></div>
+            </div>
         </section>
 
         <div class="stack">
@@ -1781,25 +2100,95 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                     </div>
                     <div class="chip">Delbar mellem husstande</div>
                 </div>
-                <div class="recipe-grid">
-                    <article class="recipe-card">
-                        <h3>Opskriftssamling</h3>
-                        <p>Opskrifter bør kunne leve på tværs af husstande, mens lager og beholdning forbliver private. Det matcher README-kravet om delt opskriftssamling med separat lagerantal.</p>
-                        <div class="recipe-list">
-                            <div class="recipe-line">
-                                <strong>Hverdagsretter</strong>
-                                <span>lagerkobling og hurtige mangellister</span>
-                            </div>
-                            <div class="recipe-line">
-                                <strong>Fryseretter</strong>
-                                <span>lokation og portionslogik</span>
-                            </div>
-                            <div class="recipe-line">
-                                <strong>Delte favoritter</strong>
-                                <span>samme opskrift, forskellige husstande</span>
-                            </div>
+
+                <!-- Import Recipe from URL -->
+                <details class="planner-card ingredient-create-panel" style="margin-bottom:12px;" id="recipeImportDetails">
+                    <summary style="cursor:pointer; font-weight:700; font-size:16px; list-style:none; display:flex; justify-content:space-between; align-items:center;">
+                        <span>Importer opskrift fra URL</span>
+                        <span class="chip" style="font-size:11px;">+ Tilføj</span>
+                    </summary>
+                    <p style="margin:10px 0 14px; color:var(--muted); font-size:13px;">Kopiér link til en opskrift (fx fra madenet.dk, finedining.dk osv) og vi parser ingredienser samt fremgangsmåde automatisk.</p>
+                    
+                    <div class="admin-row" style="margin-bottom:10px;">
+                        <span class="admin-label">Opskrifts-URL</span>
+                        <div class="admin-grid cols-2">
+                            <input class="admin-input" id="recipeImportUrl" type="url" placeholder="https://eksempel.dk/opskrift/..." style="grid-column:1/-1;">
                         </div>
-                    </article>
+                    </div>
+
+                    <div class="admin-actions">
+                        <button class="admin-button" type="button" id="recipeImportBtn">Importer opskrift</button>
+                        <button class="admin-button alt" type="button" id="recipeImportCancelBtn">Annuller</button>
+                    </div>
+                    <div class="admin-status" id="recipeImportStatus" style="margin-top:8px;"></div>
+                    <div id="recipeImportResult" style="margin-top:10px;"></div>
+                </details>
+
+                <details class="planner-card ingredient-create-panel" style="margin-bottom:12px;" id="recipeManualDetails">
+                    <summary style="cursor:pointer; font-weight:700; font-size:16px; list-style:none; display:flex; justify-content:space-between; align-items:center;">
+                        <span>Manuel opskrift (skabelon)</span>
+                        <span class="chip" style="font-size:11px;">+ Tilføj</span>
+                    </summary>
+                    <p style="margin:10px 0 14px; color:var(--muted); font-size:13px;">Brug skabelonen direkte, eller hent automatisk fra URL med Claude og ret felterne inden gem.</p>
+
+                    <div class="admin-row" style="margin-bottom:10px;">
+                        <span class="admin-label">Hent fra URL (valgfrit)</span>
+                        <div class="admin-grid cols-2">
+                            <input class="admin-input" id="recipeManualUrl" type="url" placeholder="https://eksempel.dk/opskrift/..." style="grid-column:1/-1;">
+                        </div>
+                    </div>
+
+                    <div class="admin-row" style="margin-bottom:10px;">
+                        <span class="admin-label">Titel</span>
+                        <div class="admin-grid cols-2">
+                            <input class="admin-input" id="recipeManualTitle" type="text" placeholder="Fx Italienske kødboller i tomatsauce" style="grid-column:1/-1;">
+                        </div>
+                    </div>
+
+                    <div class="admin-row" style="margin-bottom:10px;">
+                        <span class="admin-label">Beskrivelse</span>
+                        <div class="admin-grid cols-2">
+                            <textarea class="admin-input" id="recipeManualDescription" rows="3" placeholder="Kort intro til retten" style="grid-column:1/-1;"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="admin-row" style="margin-bottom:10px;">
+                        <span class="admin-label">Portioner og tid</span>
+                        <div class="admin-grid cols-2">
+                            <input class="admin-input" id="recipeManualServings" type="number" min="1" placeholder="4">
+                            <input class="admin-input" id="recipeManualMinutes" type="number" min="1" placeholder="45">
+                        </div>
+                    </div>
+
+                    <div class="admin-row" style="margin-bottom:10px;">
+                        <span class="admin-label">Ingredienser (én per linje)</span>
+                        <div class="admin-grid cols-2">
+                            <textarea class="admin-input" id="recipeManualIngredients" rows="10" placeholder="400 g hakket oksekød&#10;75 g rasp&#10;1 æg" style="grid-column:1/-1;"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="admin-row" style="margin-bottom:10px;">
+                        <span class="admin-label">Fremgangsmåde (én per linje)</span>
+                        <div class="admin-grid cols-2">
+                            <textarea class="admin-input" id="recipeManualSteps" rows="10" placeholder="Rør farsen sammen og lad den hvile 30 minutter.&#10;Form kødboller og brun dem af.&#10;Lav tomatsauce og bag i ovn." style="grid-column:1/-1;"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="admin-actions">
+                        <button class="admin-button alt" type="button" id="recipeManualFetchBtn">Hent med Claude fra URL</button>
+                        <button class="admin-button" type="button" id="recipeManualSaveBtn">Gem opskrift</button>
+                        <button class="admin-button alt" type="button" id="recipeManualCancelBtn">Ryd</button>
+                    </div>
+                    <div class="admin-status" id="recipeManualStatus" style="margin-top:8px;"></div>
+                </details>
+
+                <!-- Recipes List -->
+                <div style="margin-bottom:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h3 style="margin:0; font-size:16px;">Opskrifter i husstanden</h3>
+                        <button class="admin-button alt" type="button" id="recipeListRefreshBtn" style="padding:6px 10px; font-size:11px;">Genindlæs</button>
+                    </div>
+                    <div id="recipesList" class="recipe-cards-grid"></div>
                 </div>
             </section>
 
@@ -1942,6 +2331,19 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
                         <p class="store-card-copy">Se aktuelle tilbud og udsalg</p>
                         <div class="store-card-cta">Gennemse →</div>
                     </a>
+                </div>
+
+                <div class="offer-feed-status" id="offerFeedStatus">
+                    <div class="offer-feed-status-head">
+                        <p class="offer-feed-status-title">Aktive tilbud pr. butik</p>
+                        <span class="offer-feed-status-time" id="offerFeedStatusTime">Seneste scrape: afventer</span>
+                    </div>
+                    <div class="offer-feed-status-grid" id="offerFeedStatusGrid">
+                        <div class="offer-feed-status-pill"><strong>0</strong><span>Netto</span></div>
+                        <div class="offer-feed-status-pill"><strong>0</strong><span>Kvickly</span></div>
+                        <div class="offer-feed-status-pill"><strong>0</strong><span>365discount</span></div>
+                    </div>
+                    <div class="offer-feed-status-note">Viser aktive tilbud hentet fra tilbudsaviser.</div>
                 </div>
                 
                 <div class="shopping-top-bar">
@@ -2440,8 +2842,8 @@ async function postJson(url, body, options = {}) {
 
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) {
-        const details = payload.details ? `: ${payload.details}` : '';
-        throw new Error(`HTTP ${res.status}${details}`);
+        const details = payload.message || payload.details || payload.error || 'Ukendt fejl';
+        throw new Error(`${String(details)}`);
     }
     return payload;
 }
@@ -2505,6 +2907,48 @@ function formatDateDa(value) {
         return String(value);
     }
     return date.toLocaleDateString('da-DK');
+}
+
+function formatDateTimeDa(value) {
+    if (!value) {
+        return 'ukendt';
+    }
+    const isoLike = String(value).replace(' ', 'T');
+    const date = new Date(isoLike);
+    if (Number.isNaN(date.getTime())) {
+        return String(value);
+    }
+    return date.toLocaleString('da-DK', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function renderOfferFeedStatus(summary) {
+    const grid = document.getElementById('offerFeedStatusGrid');
+    const time = document.getElementById('offerFeedStatusTime');
+    if (!grid || !time) {
+        return;
+    }
+
+    const byStore = (summary && typeof summary.by_store === 'object' && summary.by_store) ? summary.by_store : {};
+    const knownStores = ['Netto', 'Kvickly', '365discount'];
+    const knownRows = knownStores.map(storeName => {
+        const count = Number(byStore[storeName] || 0);
+        return `<div class="offer-feed-status-pill"><strong>${count}</strong><span>${esc(storeName)}</span></div>`;
+    });
+
+    const extraRows = Object.entries(byStore)
+        .filter(([storeName, count]) => !knownStores.includes(storeName) && Number(count) > 0)
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'da'))
+        .map(([storeName, count]) => `<div class="offer-feed-status-pill"><strong>${Number(count)}</strong><span>${esc(storeName)}</span></div>`);
+
+    grid.innerHTML = [...knownRows, ...extraRows].join('');
+    const latestScrapeAt = summary?.latest_scrape_at || null;
+    time.textContent = 'Seneste scrape: ' + (latestScrapeAt ? formatDateTimeDa(latestScrapeAt) : 'ukendt');
 }
 
 function productTypeLabel(type) {
@@ -3318,16 +3762,16 @@ function renderLeafletOfferFeed(items, suggestionSourceItems = null) {
                     </div>
                     ${matchedBadge}
                 </div>
-                <div class="nutrition-strip">
-                    <div class="nutrition-chip">
+                <div class="nutrition-strip leaflet-nutrition-strip">
+                    <div class="nutrition-chip leaflet-chip">
                         <strong>${esc(formatDkk(item.price))}</strong>
                         <span>Pris</span>
                     </div>
-                    <div class="nutrition-chip">
+                    <div class="nutrition-chip leaflet-chip">
                         <strong>${esc(item.store_name || 'Ukendt')}</strong>
                         <span>Butik</span>
                     </div>
-                    <div class="nutrition-chip">
+                    <div class="nutrition-chip leaflet-chip">
                         <strong>${esc(item.is_catalog_matched ? 'Ja' : 'Nej')}</strong>
                         <span>I katalog</span>
                     </div>
@@ -5331,6 +5775,7 @@ async function refresh() {
         if (leafletOffersChip) {
             leafletOffersChip.textContent = '0 fundet';
         }
+        renderOfferFeedStatus(null);
         document.getElementById('productSummary').textContent = 'Data er nu knyttet til den bruger og de husstande, du er tildelt.';
         document.getElementById('scanSummary').textContent = 'Scanlog vises kun for den aktive husstand efter login.';
         document.getElementById('heroSummaryMeta').textContent = 'Adgangen er nu husstands-styret. Hent et access token via login, og aabn siden med access_token i URL eller localStorage.';
@@ -5418,6 +5863,7 @@ async function refresh() {
         if (leafletOffersChip) {
             leafletOffersChip.textContent = `${leafletOffersWithoutNetto.length} fundet`;
         }
+        renderOfferFeedStatus(offerFeed.summary || null);
         document.getElementById('planChip').textContent = `${inStockProductList.length ? 'Klar til ugeblik' : 'Afventer varer'}`;
         document.getElementById('attentionItemsValue').textContent = String(lowStock);
         document.getElementById('scanSummary').textContent = scans.length ? 'Scanlog findes stadig, men er gjort diskret.' : 'Scannerflowet er klar, men ligger i baggrunden indtil der er brug for det.';
@@ -5446,6 +5892,7 @@ async function refresh() {
         if (leafletOffersBody) {
             leafletOffersBody.innerHTML = '<div class="empty">Fejl ved indlæsning af tilbudsavis-liste.</div>';
         }
+        renderOfferFeedStatus(null);
         setInventoryScanStatus('Data kunne ikke opdateres lige nu.', true);
 
         const reason = formatConnectionError(e);
@@ -5464,11 +5911,430 @@ async function refresh() {
     }
 }
 
+// ──── RECIPE & MEAL PLAN FUNCTIONS ────
+
+function setRecipeImportStatus(message, isError = false) {
+    const el = document.getElementById('recipeImportStatus');
+    if (el) {
+        el.textContent = message;
+        el.classList.toggle('err', !!isError);
+    }
+}
+
+function setRecipeManualStatus(message, isError = false) {
+    const el = document.getElementById('recipeManualStatus');
+    if (el) {
+        el.textContent = message;
+        el.classList.toggle('err', !!isError);
+    }
+}
+
+function parseLinesToArray(value) {
+    return String(value || '')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+}
+
+async function extractRecipeToManualTemplate() {
+    const url = document.getElementById('recipeManualUrl')?.value?.trim() || '';
+    if (!url) {
+        setRecipeManualStatus('Indsæt en URL først.', true);
+        return;
+    }
+
+    setRecipeManualStatus('Claude henter opskriften...');
+    try {
+        const payload = await postJson('api.php?endpoint=recipes.extract_url', {
+            household_id: householdId,
+            url,
+        });
+
+        document.getElementById('recipeManualTitle').value = payload.title || '';
+        document.getElementById('recipeManualDescription').value = payload.description || '';
+        document.getElementById('recipeManualServings').value = payload.servings || '';
+        document.getElementById('recipeManualMinutes').value = payload.total_minutes || '';
+        document.getElementById('recipeManualIngredients').value = (Array.isArray(payload.ingredients) ? payload.ingredients : []).join('\n');
+        document.getElementById('recipeManualSteps').value = (Array.isArray(payload.steps) ? payload.steps : []).join('\n');
+
+        setRecipeManualStatus('Skabelon udfyldt. Gennemgå og tryk "Gem opskrift".');
+    } catch (e) {
+        setRecipeManualStatus('Fejl: ' + String(e?.message || e), true);
+    }
+}
+
+async function saveManualRecipe() {
+    const title = document.getElementById('recipeManualTitle')?.value?.trim() || '';
+    const description = document.getElementById('recipeManualDescription')?.value?.trim() || '';
+    const servings = Number(document.getElementById('recipeManualServings')?.value || 0) || null;
+    const totalMinutes = Number(document.getElementById('recipeManualMinutes')?.value || 0) || null;
+    const ingredients = parseLinesToArray(document.getElementById('recipeManualIngredients')?.value || '');
+    const steps = parseLinesToArray(document.getElementById('recipeManualSteps')?.value || '');
+
+    if (!title) {
+        setRecipeManualStatus('Titel mangler.', true);
+        return;
+    }
+    if (!ingredients.length) {
+        setRecipeManualStatus('Tilføj mindst én ingrediens.', true);
+        return;
+    }
+    if (!steps.length) {
+        setRecipeManualStatus('Tilføj mindst ét trin.', true);
+        return;
+    }
+
+    setRecipeManualStatus('Gemmer opskrift...');
+    try {
+        await postJson('api.php?endpoint=recipes.create', {
+            household_id: householdId,
+            title,
+            description,
+            servings,
+            total_minutes: totalMinutes,
+            ingredients,
+            steps,
+        });
+
+        setRecipeManualStatus('Opskrift gemt.');
+        await loadRecipes();
+        await loadMealPlan();
+    } catch (e) {
+        setRecipeManualStatus('Fejl: ' + String(e?.message || e), true);
+    }
+}
+
+async function loadRecipes() {
+    try {
+        const payload = await loadJson(`api.php?endpoint=recipes&include=details&household_id=${encodeURIComponent(householdId)}`);
+        const recipes = Array.isArray(payload.recipes) ? payload.recipes : [];
+        renderRecipesList(recipes);
+    } catch (e) {
+        const container = document.getElementById('recipesList');
+        if (container) {
+            container.innerHTML = `<div class="empty" style="color:var(--muted);">Kunne ikke indlæse opskrifter: ${esc(String(e?.message || e))}</div>`;
+        }
+    }
+}
+
+// Store fetched recipes so modal can look them up
+let _recipesCache = [];
+
+function renderRecipesList(recipes) {
+    const container = document.getElementById('recipesList');
+    if (!container) return;
+    _recipesCache = recipes;
+
+    if (!recipes.length) {
+        container.innerHTML = '<div class="empty" style="color:var(--muted);">Ingen opskrifter endnu. Importer en fra URL til venstre.</div>';
+        return;
+    }
+
+    const emojis = ['🍲','🥗','🍝','🥘','🍛','🫕','🍜','🥙','🌮','🫔'];
+    container.innerHTML = recipes.map((recipe, idx) => {
+        const title = esc(recipe.title || 'Opskrift uden navn');
+        const emoji = emojis[idx % emojis.length];
+        const timeChip = recipe.total_minutes ? `<span class="recipe-thumb-meta">${recipe.total_minutes} min</span>` : '';
+        const servChip = recipe.servings ? `<span class="recipe-thumb-meta">${recipe.servings} port.</span>` : '';
+        const danish = recipe.is_danish_verified ? '<span class="recipe-thumb-meta">🇩🇰</span>' : '';
+        return `<article class="recipe-thumb-card" data-recipe-idx="${idx}" role="button" tabindex="0" aria-label="Åbn ${title}">
+            <button class="recipe-thumb-delete" data-recipe-id="${recipe.id}" title="Slet opskrift" aria-label="Slet ${title}">✕</button>
+            <div class="recipe-thumb-emoji">${emoji}</div>
+            <div class="recipe-thumb-body">
+                <h4 class="recipe-thumb-title">${title}</h4>
+                <div class="recipe-thumb-chips">${timeChip}${servChip}${danish}</div>
+            </div>
+        </article>`;
+    }).join('');
+
+    // Delete buttons — stop propagation so card doesn't open
+    container.querySelectorAll('.recipe-thumb-delete').forEach(btn => {
+        btn.addEventListener('click', async e => {
+            e.stopPropagation();
+            if (!confirm(`Slet opskriften?`)) return;
+            try {
+                const res = await fetch(`api.php?endpoint=recipes.delete&household_id=${encodeURIComponent(householdId)}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+                    body: JSON.stringify({ recipe_id: +btn.dataset.recipeId }),
+                });
+                if (!res.ok) {
+                    const payload = await res.json().catch(() => ({}));
+                    alert('Fejl: ' + (payload.message || payload.error || `HTTP ${res.status}`));
+                    return;
+                }
+                await loadRecipes();
+            } catch (err) {
+                alert('Fejl ved sletning: ' + String(err?.message || err));
+            }
+        });
+    });
+
+    // Click / keyboard open
+    container.querySelectorAll('.recipe-thumb-card').forEach(card => {
+        const open = () => openRecipeModal(_recipesCache[+card.dataset.recipeIdx]);
+        card.addEventListener('click', open);
+        card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    });
+}
+
+function openRecipeModal(recipe) {
+    const overlay = document.getElementById('recipeModal');
+    if (!overlay) return;
+
+    document.getElementById('recipeModalTitle').textContent = recipe.title || 'Opskrift';
+    document.getElementById('recipeModalDesc').textContent = recipe.description || '';
+
+    // Stats
+    const statsEl = document.getElementById('recipeModalStats');
+    let statsHtml = '';
+    if (recipe.total_minutes) statsHtml += `<span class="recipe-stat-chip">⏱ ${recipe.total_minutes} min</span>`;
+    if (recipe.servings)      statsHtml += `<span class="recipe-stat-chip">🍽 ${recipe.servings} port.</span>`;
+    if (recipe.is_danish_verified) statsHtml += `<span class="recipe-stat-chip">🇩🇰 Dansk</span>`;
+    statsEl.innerHTML = statsHtml;
+
+    // Ingredients
+    const ingEl = document.getElementById('recipeModalIngredients');
+    const ings = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+    ingEl.innerHTML = ings.length
+        ? ings.map(i => `<div class="recipe-ingredient-row"><span class="recipe-ingredient-name">${esc(i.name || i)}</span><span class="recipe-ingredient-qty">${esc(i.quantity || '')}</span></div>`).join('')
+        : '<div class="recipe-ingredient-row" style="color:var(--muted);">Ingen ingredienser registreret</div>';
+
+    // Steps
+    const stepsEl = document.getElementById('recipeModalSteps');
+    const steps = Array.isArray(recipe.steps) ? recipe.steps : [];
+    stepsEl.innerHTML = steps.length
+        ? steps.map((s, i) => `<div class="recipe-step-row"><span class="recipe-step-num">${i+1}</span><span class="recipe-step-text">${esc(s.instruction || s)}</span></div>`).join('')
+        : '<div class="recipe-step-row" style="color:var(--muted);">Ingen trin registreret</div>';
+
+    // Assign button
+    document.getElementById('recipeModalAssign').dataset.recipeId = recipe.id;
+
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeRecipeModal() {
+    const overlay = document.getElementById('recipeModal');
+    if (overlay) overlay.style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+async function loadMealPlan() {
+    try {
+        const weekStart = getWeekStart(new Date());
+        const payload = await loadJson(`api.php?endpoint=mealplan.current&household_id=${encodeURIComponent(householdId)}&week_start=${encodeURIComponent(formatDateForApi(weekStart))}`);
+        const plan = payload.meal_plan || {};
+        const days = Array.isArray(payload.days) ? payload.days : [];
+        renderMealPlan(plan, days, weekStart);
+    } catch (e) {
+        const container = document.getElementById('mealPlanContainer');
+        if (container) {
+            container.innerHTML = `<div class="empty" style="color:var(--muted);">Kunne ikke indlæse madplan: ${esc(String(e?.message || e))}</div>`;
+        }
+    }
+}
+
+function getWeekStart(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+    d.setDate(diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+
+function formatDateForApi(date) {
+    const d = new Date(date);
+    return d.toISOString().split('T')[0];
+}
+
+function renderMealPlan(plan, days, weekStart) {
+    const container = document.getElementById('mealPlanContainer');
+    if (!container) {
+        return;
+    }
+
+    const dayNames = ['Man', 'Tirs', 'Ons', 'Tors', 'Fre', 'Lør', 'Søn'];
+    let html = '';
+    
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(weekStart);
+        d.setDate(d.getDate() + i);
+        const dateStr = formatDateForApi(d);
+        const dayOfWeek = d.getDay();
+        const dayName = dayNames[dayOfWeek === 0 ? 6 : dayOfWeek - 1];
+        const dayData = days.find(day => day.day_date === dateStr);
+        const recipeTitle = dayData?.recipe_title || '–';
+        
+        html += `<div style="padding:10px; border-radius:10px; border:1px solid rgba(20,35,29,0.1); background:rgba(255,255,255,0.7); text-align:center;">
+            <div style="font-size:12px; font-weight:700; color:var(--accent);">${dayName}</div>
+            <div style="font-size:11px; color:var(--muted); margin-top:3px;">${d.getDate()}/${String(d.getMonth()+1).padStart(2,'0')}</div>
+            <div style="font-size:12px; font-weight:600; margin-top:6px; color:var(--text); cursor:pointer;" data-meal-day="${dateStr}" data-meal-action="edit">${esc(recipeTitle)}</div>
+        </div>`;
+    }
+    
+    container.innerHTML = html;
+}
+
+async function importRecipeFromUrl() {
+    if (!accessToken) {
+        setRecipeImportStatus('Log ind først.', true);
+        return;
+    }
+
+    const url = document.getElementById('recipeImportUrl')?.value?.trim() || '';
+    if (!url) {
+        setRecipeImportStatus('Indsæt en URL først.', true);
+        return;
+    }
+
+    setRecipeImportStatus('Importerer opskrift...');
+    try {
+        const payload = await postJson('api.php?endpoint=recipes.import_url', {
+            household_id: householdId,
+            url: url,
+        });
+
+        const danish = payload.danish_score ? `danish_score: ${(payload.danish_score * 100).toFixed(0)}%` : 'unknown score';
+        const resultDiv = document.getElementById('recipeImportResult');
+        if (resultDiv) {
+            resultDiv.innerHTML = `<div style="padding:10px; border-radius:10px; border:1px solid rgba(47,106,86,0.2); background:rgba(47,106,86,0.06);">
+                <strong>✓ Importeret:</strong> ${esc(payload.title || 'Opskrift')}<br>
+                <span style="font-size:12px; color:var(--muted);">${esc(String(payload.ingredients_added || 0))} ingredienser, ${esc(String(payload.steps_added || 0))} trin (${danish})</span>
+            </div>`;
+        }
+
+        setRecipeImportStatus('Opskrift importeret! Genindlæser listen...');
+        document.getElementById('recipeImportUrl').value = '';
+        await new Promise(r => setTimeout(r, 800));
+        await loadRecipes();
+        await loadMealPlan();
+        setRecipeImportStatus('');
+    } catch (e) {
+        setRecipeImportStatus('Fejl: ' + String(e?.message || e), true);
+    }
+}
+
+function initRecipeHandlers() {
+    const importBtn = document.getElementById('recipeImportBtn');
+    const importCancelBtn = document.getElementById('recipeImportCancelBtn');
+    const recipeListRefreshBtn = document.getElementById('recipeListRefreshBtn');
+    const mealPlanRefreshBtn = document.getElementById('mealPlanRefreshBtn');
+    const manualFetchBtn = document.getElementById('recipeManualFetchBtn');
+    const manualSaveBtn = document.getElementById('recipeManualSaveBtn');
+    const manualCancelBtn = document.getElementById('recipeManualCancelBtn');
+    const recipesList = document.getElementById('recipesList');
+    const mealPlanContainer = document.getElementById('mealPlanContainer');
+
+    if (importBtn) {
+        importBtn.addEventListener('click', () => void importRecipeFromUrl());
+    }
+    if (importCancelBtn) {
+        importCancelBtn.addEventListener('click', () => {
+            document.getElementById('recipeImportDetails')?.removeAttribute('open');
+            document.getElementById('recipeImportUrl').value = '';
+            setRecipeImportStatus('');
+        });
+    }
+    if (recipeListRefreshBtn) {
+        recipeListRefreshBtn.addEventListener('click', () => void loadRecipes());
+    }
+    if (mealPlanRefreshBtn) {
+        mealPlanRefreshBtn.addEventListener('click', () => void loadMealPlan());
+    }
+    if (manualFetchBtn) {
+        manualFetchBtn.addEventListener('click', () => void extractRecipeToManualTemplate());
+    }
+    if (manualSaveBtn) {
+        manualSaveBtn.addEventListener('click', () => void saveManualRecipe());
+    }
+    if (manualCancelBtn) {
+        manualCancelBtn.addEventListener('click', () => {
+            document.getElementById('recipeManualTitle').value = '';
+            document.getElementById('recipeManualDescription').value = '';
+            document.getElementById('recipeManualServings').value = '';
+            document.getElementById('recipeManualMinutes').value = '';
+            document.getElementById('recipeManualIngredients').value = '';
+            document.getElementById('recipeManualSteps').value = '';
+            setRecipeManualStatus('');
+        });
+    }
+
+    if (recipesList) {
+        recipesList.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) {
+                return;
+            }
+            const btn = target.closest('[data-recipe-action]');
+            if (!(btn instanceof HTMLElement)) {
+                return;
+            }
+            const action = btn.dataset.recipeAction || '';
+            const recipeId = btn.dataset.recipeId || '';
+            if (action === 'assign-to-day' && recipeId) {
+                assignRecipeToDayModal(Number(recipeId));
+            }
+        });
+    }
+
+    if (mealPlanContainer) {
+        mealPlanContainer.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) {
+                return;
+            }
+            const btn = target.closest('[data-meal-action]');
+            if (!(btn instanceof HTMLElement)) {
+                return;
+            }
+            const action = btn.dataset.mealAction || '';
+            const dayStr = btn.dataset.mealDay || '';
+            if (action === 'edit' && dayStr) {
+                editMealForDay(dayStr);
+            }
+        });
+    }
+}
+
+function assignRecipeToDayModal(recipeId) {
+    const dayStr = prompt('Hvilken dag? (YYYY-MM-DD)');
+    if (!dayStr) {
+        return;
+    }
+    assignRecipeToDay(recipeId, dayStr);
+}
+
+async function assignRecipeToDay(recipeId, dayDate) {
+    try {
+        await postJson('api.php?endpoint=mealplan.set_day', {
+            household_id: householdId,
+            day_date: dayDate,
+            recipe_id: recipeId,
+            note: '',
+        });
+        await loadMealPlan();
+        alert('Dag opdateret!');
+    } catch (e) {
+        alert('Fejl: ' + String(e?.message || e));
+    }
+}
+
+function editMealForDay(dayDate) {
+    const recipeId = prompt('Opskrifts-ID at tildele (eller tom for at fjerne)');
+    if (recipeId === null) {
+        return;
+    }
+    assignRecipeToDay(Number(recipeId) || 0, dayDate);
+}
+
 document.getElementById('refreshButton').addEventListener('click', refresh);
 document.getElementById('aiSuggestButton').addEventListener('click', fetchAiIdeas);
 window.addEventListener('hashchange', updateNavFromHash);
 initAdminConsole();
 initIngredientTools();
+initRecipeHandlers();
 initBarcodeScannerCapture();
 initInventoryScanActions();
 initShoppingListActions();
@@ -5478,10 +6344,14 @@ updateNavFromHash();
 initAuthGate();
 enforceAuthGate().then(() => {
     if (accessToken) {
+        loadRecipes();
+        loadMealPlan();
         refresh();
     }
 });
 setInterval(refresh, 5000);
+setInterval(() => { void loadRecipes(); }, 30000);
+setInterval(() => { void loadMealPlan(); }, 30000);
 const pollModeInterval = setInterval(pollInventoryModeFromServer, 500);  // Poll server for mode changes from ESP32 button
 console.log('[Init] Started mode polling interval:', pollModeInterval);
 pollInventoryModeFromServer();  // Initial poll
@@ -5490,6 +6360,43 @@ pollInventoryLastScanFromServer();
 setInterval(() => {
     void syncDeviceScanContext(false);
 }, 10000);
+</script>
+
+<!-- Recipe Detail Modal -->
+<div id="recipeModal" class="recipe-modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="recipeModalTitle">
+  <div class="recipe-modal">
+    <div class="recipe-modal-head">
+      <h2 class="recipe-modal-title" id="recipeModalTitle"></h2>
+      <button class="recipe-modal-close" id="recipeModalClose" aria-label="Luk">✕</button>
+    </div>
+    <p class="recipe-modal-desc" id="recipeModalDesc"></p>
+    <div class="recipe-modal-stats" id="recipeModalStats"></div>
+    <h3 class="recipe-modal-section-title">Ingredienser</h3>
+    <div class="recipe-modal-ingredients" id="recipeModalIngredients"></div>
+    <h3 class="recipe-modal-section-title">Fremgangsmåde</h3>
+    <div class="recipe-modal-steps" id="recipeModalSteps"></div>
+    <div class="recipe-modal-actions">
+      <button class="admin-button" id="recipeModalAssign" data-recipe-id="" data-recipe-action="assign-to-day" type="button" style="width:100%;">📅 Tildel til madplan</button>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const overlay = document.getElementById('recipeModal');
+    if (!overlay) return;
+    // Close on X button
+    document.getElementById('recipeModalClose').addEventListener('click', closeRecipeModal);
+    // Close on backdrop click
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeRecipeModal(); });
+    // Close on Escape
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && overlay.style.display !== 'none') closeRecipeModal(); });
+    // Assign button closes modal after
+    document.getElementById('recipeModalAssign').addEventListener('click', function() {
+        closeRecipeModal();
+        assignRecipeToDayModal(this.dataset.recipeId);
+    });
+});
 </script>
 </body>
 </html>

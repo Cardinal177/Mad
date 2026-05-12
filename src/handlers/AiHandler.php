@@ -7,20 +7,24 @@ function isAiEnabled(): bool
     return strtolower((string) (env_value('AI_ENABLED', 'false') ?? 'false')) === 'true';
 }
 
-function callAnthropic(string $systemPrompt, string $userPrompt): array
+function callAnthropic(string $systemPrompt, string $userPrompt, ?int $maxTokensOverride = null): array
 {
     $apiKey = (string) (env_value('ANTHROPIC_API_KEY', '') ?? '');
     $model = (string) (env_value('ANTHROPIC_MODEL', 'claude-3-5-haiku-latest') ?? 'claude-3-5-haiku-latest');
     $apiUrl = (string) (env_value('ANTHROPIC_API_URL', 'https://api.anthropic.com/v1/messages') ?? 'https://api.anthropic.com/v1/messages');
-    $maxTokens = (int) (env_value('ANTHROPIC_MAX_TOKENS', '900') ?? '900');
+    $maxTokens = (int) (env_value('ANTHROPIC_MAX_TOKENS', '2200') ?? '2200');
     $temperature = (float) (env_value('ANTHROPIC_TEMPERATURE', '0.5') ?? '0.5');
+
+    if ($maxTokensOverride !== null) {
+        $maxTokens = $maxTokensOverride;
+    }
 
     if ($apiKey === '') {
         return ['ok' => false, 'error' => 'ANTHROPIC_API_KEY is missing'];
     }
 
-    if ($maxTokens < 200 || $maxTokens > 4096) {
-        $maxTokens = 900;
+    if ($maxTokens < 200 || $maxTokens > 8192) {
+        $maxTokens = 2200;
     }
 
     if ($temperature < 0 || $temperature > 1) {

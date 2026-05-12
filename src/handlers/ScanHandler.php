@@ -236,6 +236,509 @@ function householdInventoryHasColumn(PDO $pdo, string $column): bool
     return $cache[$column];
 }
 
+function tableExists(PDO $pdo, string $table): bool
+{
+    static $cache = [];
+
+    if (array_key_exists($table, $cache)) {
+        return $cache[$table];
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT 1
+         FROM INFORMATION_SCHEMA.TABLES
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$table]);
+    $cache[$table] = (bool) $stmt->fetchColumn();
+
+    return $cache[$table];
+}
+
+function recipesHasColumn(PDO $pdo, string $column): bool
+{
+    static $cache = [];
+
+    if (array_key_exists($column, $cache)) {
+        return $cache[$column];
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT 1
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = ?
+           AND COLUMN_NAME = ?
+         LIMIT 1'
+    );
+    $stmt->execute(['recipes', $column]);
+    $cache[$column] = (bool) $stmt->fetchColumn();
+
+    return $cache[$column];
+}
+
+function parseIso8601DurationToMinutes(?string $duration): ?int
+{
+    $value = trim((string) $duration);
+    if ($value === '') {
+        return null;
+    }
+
+    if (preg_match('/^PT(?:(\d+)H)?(?:(\d+)M)?$/i', $value, $matches) === 1) {
+        $hours = isset($matches[1]) && $matches[1] !== '' ? (int) $matches[1] : 0;
+        $minutes = isset($matches[2]) && $matches[2] !== '' ? (int) $matches[2] : 0;
+        $total = ($hours * 60) + $minutes;
+        return $total > 0 ? $total : null;
+    }
+
+    return null;
+}
+
+function parseRecipeYieldToServings($recipeYield): ?int
+{
+    if (is_numeric($recipeYield)) {
+        $servings = (int) $recipeYield;
+        return $servings > 0 ? $servings : null;
+    }
+
+    if (is_array($recipeYield)) {
+        foreach ($recipeYield as $item) {
+            $parsed = parseRecipeYieldToServings($item);
+            if ($parsed !== null) {
+                return $parsed;
+            }
+        }
+        return null;
+    }
+
+    $text = trim((string) $recipeYield);
+    if ($text === '') {
+        return null;
+    }
+
+    if (preg_match('/(\d{1,2})/', $text, $matches) === 1) {
+        $servings = (int) $matches[1];
+        return $servings > 0 ? $servings : null;
+    }
+
+    return null;
+}
+
+function extractRecipeInstructionsAsSteps($instructions): array
+{
+    if (is_string($instructions)) {
+        $parts = preg_split('/\r\n|\r|\n/', $instructions);
+        return array_values(array_filter(array_map('trim', $parts ?: []), static fn($step): bool => $step !== ''));
+    }
+
+    if (!is_array($instructions)) {
+        return [];
+    }
+
+    $steps = [];
+    foreach ($instructions as $entry) {
+        if (is_string($entry)) {
+            $step = trim($entry);
+            if ($step !== '') {
+                $steps[] = $step;
+            }
+            continue;
+        }
+
+        if (is_array($entry)) {
+            $text = trim((string) ($entry['text'] ?? ''));
+            if ($text !== '') {
+                $steps[] = $text;
+                continue;
+            }
+
+            if (isset($entry['itemListElement']) && is_array($entry['itemListElement'])) {
+                foreach (extractRecipeInstructionsAsSteps($entry['itemListElement']) as $nestedStep) {
+                    $steps[] = $nestedStep;
+                }
+            }
+        }
+    }
+
+    return array_values(array_filter(array_map('trim', $steps), static fn($step): bool => $step !== ''));
+}
+
+function normalizeRecipeIngredientText(string $value): string
+{
+    $text = mb_strtolower(trim($value));
+    $text = preg_replace('/\s+/u', ' ', $text);
+    return trim((string) $text);
+}
+
+function computeDanishRecipeSignal(string $title, string $description, array $ingredients, array $steps): array
+{
+    $blob = mb_strtolower(trim($title . ' ' . $description . ' ' . implode(' ', $ingredients) . ' ' . implode(' ', $steps)));
+
+    $danishStopWords = [
+        ' og ', ' med ', ' til ', ' i ', ' pa ', ' af ', ' det ', ' den ', ' de ', ' en ', ' et ',
+        ' minutter', ' time', ' ovn', ' steg', ' bland', ' server', ' varm',
+    ];
+    $danishFoodWords = [
+        'log', 'hvidlog', 'gulerod', 'kartoffel', 'hakket', 'flode', 'maelk', 'smor', 'ost', 'kylling',
+        'svinekod', 'oksekod', 'fars', 'salt', 'peber', 'persille', 'dild', 'pisk', 'bag',
+    ];
+
+    $hits = 0;
+    foreach ($danishStopWords as $word) {
+        if (str_contains($blob, $word)) {
+            $hits++;
+        }
+    }
+
+    $foodHits = 0;
+    foreach ($danishFoodWords as $word) {
+        if (str_contains($blob, $word)) {
+            $foodHits++;
+        }
+    }
+
+    $specialChars = preg_match_all('/[aeo]/u', strtr($blob, ['æ' => 'a', 'ø' => 'o', 'å' => 'a']), $matches);
+    $score = min(1.0, (($hits * 0.06) + ($foodHits * 0.08) + (min(6, $specialChars) * 0.01)));
+
+    return [
+        'score' => round($score, 3),
+        'is_danish' => $score >= 0.35,
+    ];
+}
+
+function fetchRecipeHtmlFromUrl(string $url): string
+{
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT => 12,
+        CURLOPT_HTTPHEADER => [
+            'Accept: text/html,application/xhtml+xml',
+            'User-Agent: MadRecipeImporter/0.1 (+https://example.local)',
+        ],
+    ]);
+
+    $html = curl_exec($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if (!is_string($html) || $html === '' || $httpCode < 200 || $httpCode >= 300) {
+        throw new RuntimeException('Kunne ikke hente opskriftssiden (HTTP ' . $httpCode . ')');
+    }
+
+    return $html;
+}
+
+function fetchRecipeJsonLdFromUrl(string $url): array
+{
+    $html = fetchRecipeHtmlFromUrl($url);
+
+    // Try Recipe JSON-LD first
+    if (preg_match_all('/<script[^>]+type="application\/ld\+json"[^>]*>(.*?)<\/script>/is', $html, $matches)) {
+        $jsonBlocks = $matches[1] ?? [];
+        foreach ($jsonBlocks as $block) {
+            $decoded = json_decode(trim((string) $block), true);
+            if (!is_array($decoded)) {
+                continue;
+            }
+
+            $candidates = [];
+            if (isset($decoded['@graph']) && is_array($decoded['@graph'])) {
+                $candidates = $decoded['@graph'];
+            } elseif (array_is_list($decoded)) {
+                $candidates = $decoded;
+            } else {
+                $candidates = [$decoded];
+            }
+
+            foreach ($candidates as $candidate) {
+                if (!is_array($candidate)) {
+                    continue;
+                }
+                $type = $candidate['@type'] ?? null;
+                if (is_array($type)) {
+                    $hasRecipe = in_array('Recipe', $type, true);
+                } else {
+                    $hasRecipe = (string) $type === 'Recipe';
+                }
+                if ($hasRecipe) {
+                    return $candidate;
+                }
+            }
+        }
+    }
+
+    // Try AI extraction directly from raw HTML (much more reliable than regex)
+    $aiResult = extractRecipeWithAiFromHtml($html);
+    if ($aiResult !== null) {
+        return $aiResult;
+    }
+
+    // Final fallback: basic regex HTML parsing
+    return parseRecipeFromHtml($html);
+}
+
+function stripHtmlForAi(string $html): string
+{
+    // Remove non-content blocks
+    $html = preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html);
+    $html = preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $html);
+    $html = preg_replace('/<(nav|header|footer|aside|form|dialog|noscript)\b[^>]*>.*?<\/\1>/is', '', $html);
+
+    // Find the recipe section in raw HTML BEFORE stripping tags.
+    // Look for the last occurrence of common Danish recipe anchors in HTML text nodes.
+    $anchors = ['Ingredienser', 'Fremgangsmåde'];
+    $bestPos = false;
+    foreach ($anchors as $anchor) {
+        $found = mb_stripos($html, $anchor);
+        if ($found !== false) {
+            $bestPos = max(0, $found - 1000);
+            break;
+        }
+    }
+
+    if ($bestPos !== false) {
+        $html = mb_substr($html, $bestPos, 40000);
+    }
+
+    $html = strip_tags($html);
+    $html = preg_replace('/[ \t]+/', ' ', $html);
+    $html = preg_replace('/\n{3,}/', "\n\n", $html);
+    return mb_substr(trim($html), 0, 20000);
+}
+
+function extractRecipeWithAiFromHtml(string $html): ?array
+{
+    $apiKey = (string) (env_value('ANTHROPIC_API_KEY', '') ?? '');
+    if ($apiKey === '' || strtolower((string) (env_value('AI_ENABLED', 'false') ?? 'false')) !== 'true') {
+        return null;
+    }
+
+    try {
+        require_once __DIR__ . '/AiHandler.php';
+
+        $pageText = stripHtmlForAi($html);
+
+        $prompt = "Følgende tekst er hentet fra en opskriftsside. Udtræk præcist opskriften og svar som ren JSON (ingen markdown, ingen forklaring).\n"
+            . "VIGTIGT: Medtag ALLE ingredienser og ALLE trin fra selve opskriften. Undlad tips, kommentarer, navigation og andet støjindhold.\n\n"
+            . $pageText . "\n\n"
+            . "Svar KUN med dette JSON-objekt:\n"
+            . "{\n"
+            . "  \"title\": \"[Opskriftens navn]\",\n"
+            . "  \"description\": \"[Kort beskrivelse]\",\n"
+            . "  \"servings\": 4,\n"
+            . "  \"total_minutes\": 30,\n"
+            . "  \"prep_minutes\": 10,\n"
+            . "  \"cook_minutes\": 20,\n"
+            . "  \"ingredients\": [\"2 løg, finthakket\", \"3 fed hvidløg\"],\n"
+            . "  \"steps\": [\"Sauter løgene...\", \"Tilsæt tomater...\"]\n"
+            . "}";
+
+        $result = callAnthropic(
+            'Du er en kulinarisk data-specialist. Du udtrækker opskrifter fra websider præcist og svarer altid som ren JSON.',
+            $prompt,
+            3200
+        );
+
+        if (!$result['ok']) {
+            return null;
+        }
+
+        // Strip potential markdown code fences
+        $text = trim($result['text']);
+        $text = preg_replace('/^```(?:json)?\s*/i', '', $text);
+        $text = preg_replace('/\s*```$/', '', $text);
+
+        $cleaned = json_decode($text, true);
+        if (!is_array($cleaned) || empty($cleaned['title'])) {
+            return null;
+        }
+
+        $prepMin  = (int) ($cleaned['prep_minutes'] ?? 0);
+        $cookMin  = (int) ($cleaned['cook_minutes'] ?? 0);
+        $totalMin = (int) ($cleaned['total_minutes'] ?? ($prepMin + $cookMin));
+
+        return [
+            'name'               => $cleaned['title'],
+            'description'        => $cleaned['description'] ?? '',
+            'recipeIngredient'   => array_values(array_filter((array) ($cleaned['ingredients'] ?? []))),
+            'recipeInstructions' => array_map(static fn($s) => ['text' => (string) $s], array_values(array_filter((array) ($cleaned['steps'] ?? [])))),
+            'recipeYield'        => (string) ($cleaned['servings'] ?? '4'),
+            'prepTime'           => 'PT' . $prepMin . 'M',
+            'cookTime'           => 'PT' . $cookMin . 'M',
+            'totalTime'          => 'PT' . $totalMin . 'M',
+            'ai_cleaned'         => true,
+        ];
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+function parseRecipeFromHtml(string $html): array
+{
+    // Extract title from h1 or meta og:title
+    $title = '';
+    if (preg_match('/<h1[^>]*>([^<]+)<\/h1>/i', $html, $m)) {
+        $title = trim(strip_tags($m[1]));
+    } elseif (preg_match('/<meta\s+property="og:title"\s+content="([^"]+)"/i', $html, $m)) {
+        $title = trim($m[1]);
+    } elseif (preg_match('/<title>([^<]+)<\/title>/i', $html, $m)) {
+        $title = trim($m[1]);
+    }
+
+    if ($title === '') {
+        throw new RuntimeException('Kunne ikke parse opskrift: ingen titel fundet');
+    }
+
+    // Extract description from meta og:description or first p tag
+    $description = '';
+    if (preg_match('/<meta\s+property="og:description"\s+content="([^"]+)"/i', $html, $m)) {
+        $description = trim($m[1]);
+    } elseif (preg_match('/<p[^>]*>([^<]+)<\/p>/i', $html, $m)) {
+        $description = trim(strip_tags($m[1]));
+    }
+
+    // Extract ingredients - look for common patterns
+    $ingredients = [];
+    
+    // Pattern 1: <li> items (common in lists)
+    if (preg_match_all('/<li[^>]*>([^<]+)<\/li>/i', $html, $matches)) {
+        foreach ($matches[1] as $item) {
+            $cleaned = trim(strip_tags($item));
+            if (strlen($cleaned) > 5 && strlen($cleaned) < 200) {
+                $ingredients[] = $cleaned;
+            }
+        }
+    }
+
+    // Pattern 2: lines with common cooking units if li didn't work well
+    if (count($ingredients) < 3) {
+        $lines = explode("\n", $html);
+        foreach ($lines as $line) {
+            $line = trim(strip_tags($line));
+            // Match lines with numbers + units (e.g., "2 cups flour", "500g butter")
+            if (preg_match('/^\d+[\.,\s]+(gram|g|ml|cup|spoon|tsk|tbsp|liter|l|stk|stk\.|bdt|dl|pint|oz)/i', $line)) {
+                if (strlen($line) > 5 && strlen($line) < 200) {
+                    $ingredients[] = $line;
+                }
+            }
+        }
+    }
+
+    if (empty($ingredients)) {
+        $ingredients = ['Ingredienser kunne ikke parses fra siden'];
+    }
+
+    // Extract instructions - numbered steps or paragraphs
+    $steps = [];
+    if (preg_match_all('/<li[^>]*>([^<]+)<\/li>/i', $html, $matches)) {
+        foreach ($matches[1] as $item) {
+            $cleaned = trim(strip_tags($item));
+            if (strlen($cleaned) > 10 && strlen($cleaned) < 500) {
+                $steps[] = $cleaned;
+            }
+        }
+    }
+
+    if (empty($steps)) {
+        $steps = ['Fremgangsmåde kunne ikke parses fra siden'];
+    }
+
+    return [
+        'name' => $title,
+        'description' => $description,
+        'recipeIngredient' => array_slice($ingredients, 0, 20),
+        'recipeInstructions' => [
+            ['text' => implode(' ', array_slice($steps, 0, 10))]
+        ],
+        'recipeYield' => '4',
+        'prepTime' => 'PT15M',
+        'cookTime' => 'PT30M',
+        'totalTime' => 'PT45M',
+    ];
+}
+
+function cleanRecipeWithAi(array $rawRecipe): array
+{
+    // Skip AI cleanup if not enabled or no API key
+    $apiKey = (string) (env_value('ANTHROPIC_API_KEY', '') ?? '');
+    if ($apiKey === '' || strtolower((string) (env_value('AI_ENABLED', 'false') ?? 'false')) !== 'true') {
+        return $rawRecipe;
+    }
+
+    try {
+        require_once __DIR__ . '/AiHandler.php';
+
+        $ingredientsList = implode("\n", array_slice($rawRecipe['recipeIngredient'] ?? [], 0, 15));
+        $instructionList = is_array($rawRecipe['recipeInstructions'] ?? null) 
+            ? implode("\n", array_map(fn($s) => (string) ($s['text'] ?? $s), $rawRecipe['recipeInstructions']))
+            : (string) ($rawRecipe['recipeInstructions'] ?? '');
+
+        $prompt = "Du er en kulinarisk assistent. Jeg har parset følgende rådata fra en opskrift. Strukture og forbedre den. Output JSON:\n\n"
+            . "INGREDIENSER:\n" . $ingredientsList . "\n\n"
+            . "FREMGANGSMÅDE:\n" . $instructionList . "\n\n"
+            . "OPSKRIFT-DETALJER:\n"
+            . "Titel: " . ($rawRecipe['name'] ?? 'Ukendt') . "\n"
+            . "Portioner: " . ($rawRecipe['recipeYield'] ?? '4') . "\n"
+            . "Beskrivelse: " . ($rawRecipe['description'] ?? '') . "\n\n"
+            . "Svar som ren JSON (ingen markdown):\n"
+            . "{\n"
+            . "  \"title\": \"[Opskrift titel]\",\n"
+            . "  \"description\": \"[Kort beskrivelse]\",\n"
+            . "  \"servings\": [antal portioner som number],\n"
+            . "  \"prep_minutes\": [forberedelse i minutter],\n"
+            . "  \"cook_minutes\": [kogning i minutter],\n"
+            . "  \"ingredients\": [\n"
+            . "    {\"name\": \"ingredient\", \"quantity\": \"amount\", \"unit\": \"g/ml/stk\"}\n"
+            . "  ],\n"
+            . "  \"steps\": [\"step 1\", \"step 2\", ...],\n"
+            . "  \"tags\": [\"vegetarisk\", \"hurtig\", ...]\n"
+            . "}";
+
+        $result = callAnthropic(
+            'Du er en kulinarisk data-specialist som strukturerer og forbedrer opskrifts-data. Du svarer altid som ren JSON.',
+            $prompt,
+            2400
+        );
+
+        if (!$result['ok']) {
+            return $rawRecipe;
+        }
+
+        $cleaned = json_decode($result['text'], true);
+        if (!is_array($cleaned)) {
+            return $rawRecipe;
+        }
+
+        // Map cleaned data back to our schema
+        return [
+            'name' => $cleaned['title'] ?? $rawRecipe['name'] ?? 'Opskrift',
+            'description' => $cleaned['description'] ?? $rawRecipe['description'] ?? '',
+            'recipeIngredient' => array_map(
+                static fn($ing) => is_array($ing) 
+                    ? (($ing['quantity'] ?? '') ? $ing['quantity'] . ' ' : '') . ($ing['unit'] ?? '') . ' ' . ($ing['name'] ?? '')
+                    : $ing,
+                $cleaned['ingredients'] ?? []
+            ),
+            'recipeInstructions' => array_map(
+                static fn($step) => ['text' => $step],
+                $cleaned['steps'] ?? []
+            ),
+            'recipeYield' => (string) ($cleaned['servings'] ?? '4'),
+            'prepTime' => 'PT' . (int) ($cleaned['prep_minutes'] ?? 15) . 'M',
+            'cookTime' => 'PT' . (int) ($cleaned['cook_minutes'] ?? 30) . 'M',
+            'totalTime' => 'PT' . ((int) ($cleaned['prep_minutes'] ?? 15) + (int) ($cleaned['cook_minutes'] ?? 30)) . 'M',
+            'ai_cleaned' => true,
+        ];
+    } catch (Throwable $e) {
+        // If AI fails, just return raw recipe
+        return $rawRecipe;
+    }
+}
+
 function ensureHouseholdInventoryBasisColumn(PDO $pdo): void
 {
     static $attempted = false;
@@ -1007,7 +1510,9 @@ function handleShoppingCandidates(PDO $pdo): void
         }
         $productIds = array_values(array_unique($productIds));
 
-        $bestOffersByProduct = [];
+                $bestOffersByProduct = [];
+                $today = new DateTimeImmutable('today');
+                $todayStr = $today->format('Y-m-d');
         if ($productIds !== []) {
             $placeholders = implode(',', array_fill(0, count($productIds), '?'));
             $stmt = $pdo->prepare(
@@ -1018,14 +1523,18 @@ function handleShoppingCandidates(PDO $pdo): void
                      FROM store_offers
                      WHERE title = "Tilbud"
                        AND product_id IN (' . $placeholders . ')
-                       AND (valid_to IS NULL OR valid_to >= CURDATE())
+                                             AND (valid_from IS NULL OR valid_from <= ?)
+                                             AND valid_to IS NOT NULL
+                                             AND valid_to >= ?
                      GROUP BY product_id
                  ) best ON best.product_id = so.product_id AND best.min_price = so.price
                  WHERE so.title = "Tilbud"
-                   AND (so.valid_to IS NULL OR so.valid_to >= CURDATE())
+                    AND (so.valid_from IS NULL OR so.valid_from <= ?)
+                                     AND so.valid_to IS NOT NULL
+                                     AND so.valid_to >= ?
                  ORDER BY so.product_id ASC, so.valid_to ASC, so.id DESC'
             );
-            $stmt->execute($productIds);
+                                                $stmt->execute(array_merge($productIds, [$todayStr, $todayStr, $todayStr, $todayStr]));
 
             foreach ($stmt->fetchAll() ?: [] as $row) {
                 $productId = (int) ($row['product_id'] ?? 0);
@@ -1107,8 +1616,21 @@ function handleShoppingOfferFeed(PDO $pdo): void
     }
 
     $storeFilter = trim((string) ($_GET['store'] ?? ''));
+    $today = new DateTimeImmutable('today');
+    $todayStr = $today->format('Y-m-d');
 
     try {
+                $whereClause = ' WHERE so.title LIKE "Tilbud:%"
+             AND (so.valid_from IS NULL OR so.valid_from <= ?)
+             AND so.valid_to IS NOT NULL
+             AND so.valid_to >= ?';
+
+        $whereParams = [$todayStr, $todayStr];
+        if ($storeFilter !== '') {
+            $whereClause .= ' AND so.store_name = ?';
+            $whereParams[] = $storeFilter;
+        }
+
         $query = 'SELECT
                 so.id,
                 so.store_name,
@@ -1121,22 +1643,34 @@ function handleShoppingOfferFeed(PDO $pdo): void
                 so.created_at,
                 p.name AS linked_product_name
              FROM store_offers so
-             LEFT JOIN products p ON p.id = so.product_id
-             WHERE so.title LIKE "Tilbud:%"';
+             LEFT JOIN products p ON p.id = so.product_id' . $whereClause;
 
-        $params = [];
-
-        if ($storeFilter !== '') {
-            $query .= ' AND so.store_name = ?';
-            $params[] = $storeFilter;
-        }
-
-        $query .= ' ORDER BY so.created_at DESC LIMIT ' . $limit;
+        $query .= ' ORDER BY so.created_at DESC, so.id DESC';
 
         $stmt = $pdo->prepare($query);
-        $stmt->execute($params);
+        $stmt->execute($whereParams);
 
-        $items = array_map(static function (array $row): array {
+        $rows = $stmt->fetchAll() ?: [];
+        $seenKeys = [];
+        $dedupedRows = [];
+        foreach ($rows as $row) {
+            $storeKey = mb_strtolower(trim((string) ($row['store_name'] ?? '')));
+            $titleKey = mb_strtolower(trim((string) ($row['title'] ?? '')));
+            $priceKey = isset($row['price']) && $row['price'] !== null
+                ? number_format((float) $row['price'], 4, '.', '')
+                : 'null';
+            $validFromKey = $row['valid_from'] !== null ? (string) $row['valid_from'] : '';
+            $validToKey = $row['valid_to'] !== null ? (string) $row['valid_to'] : '';
+            $dedupeKey = $storeKey . '|' . $titleKey . '|' . $priceKey . '|' . $validFromKey . '|' . $validToKey;
+
+            if (isset($seenKeys[$dedupeKey])) {
+                continue;
+            }
+            $seenKeys[$dedupeKey] = true;
+            $dedupedRows[] = $row;
+        }
+
+        $rowsToItems = static function (array $row): array {
             $title = (string) ($row['title'] ?? '');
             $leafletName = trim((string) preg_replace('/^Tilbud:\s*/u', '', $title));
             $resolvedName = $leafletName !== '' ? $leafletName : ($row['linked_product_name'] ?? 'Ukendt vare');
@@ -1154,15 +1688,58 @@ function handleShoppingOfferFeed(PDO $pdo): void
                 'created_at' => (string) ($row['created_at'] ?? ''),
                 'is_catalog_matched' => !empty($row['product_id']),
             ];
-        }, $stmt->fetchAll() ?: []);
+        };
+
+        $allItems = array_map($rowsToItems, $dedupedRows);
+        $items = array_slice($allItems, 0, $limit);
+
+        $normalizeStoreLabel = static function (string $value): string {
+            $trimmed = trim($value);
+            if ($trimmed === '') {
+                return 'Ukendt';
+            }
+
+            $normalized = strtolower(preg_replace('/\s+/', '', $trimmed));
+            if ($normalized === 'netto') {
+                return 'Netto';
+            }
+            if ($normalized === 'kvickly') {
+                return 'Kvickly';
+            }
+            if ($normalized === '365discount' || $normalized === '365') {
+                return '365discount';
+            }
+
+            return $trimmed;
+        };
+
+        $total = count($allItems);
+        $matched = count(array_filter($allItems, static fn(array $item): bool => !empty($item['is_catalog_matched'])));
+        $latestScrapeAt = null;
+        foreach ($allItems as $item) {
+            $createdAt = trim((string) ($item['created_at'] ?? ''));
+            if ($createdAt !== '' && ($latestScrapeAt === null || $createdAt > $latestScrapeAt)) {
+                $latestScrapeAt = $createdAt;
+            }
+        }
+
+        $byStore = [];
+        foreach ($allItems as $item) {
+            $store = $normalizeStoreLabel((string) ($item['store_name'] ?? ''));
+            $byStore[$store] = (int) ($byStore[$store] ?? 0) + 1;
+        }
+        ksort($byStore, SORT_NATURAL | SORT_FLAG_CASE);
 
         response(200, [
             'status' => 'ok',
             'items' => $items,
             'summary' => [
-                'total' => count($items),
-                'matched' => count(array_filter($items, static fn(array $item): bool => !empty($item['is_catalog_matched']))),
-                'unmatched' => count(array_filter($items, static fn(array $item): bool => empty($item['is_catalog_matched']))),
+                'total' => $total,
+                'matched' => $matched,
+                'unmatched' => max(0, $total - $matched),
+                'returned' => count($items),
+                'by_store' => $byStore,
+                'latest_scrape_at' => $latestScrapeAt,
             ],
         ]);
     } catch (Throwable $e) {
@@ -1316,9 +1893,23 @@ function handleShoppingList(PDO $pdo): void
 
             $storedOfferId = isset($row['offer_id']) && $row['offer_id'] !== null ? (int) $row['offer_id'] : null;
             $storedOfferPrice = $row['offer_price'] !== null ? (float) $row['offer_price'] : null;
+            $storedOfferValidTo = ($row['offer_valid_until'] !== null) ? (string) $row['offer_valid_until'] : null;
             $exactFallbackPrice = $row['fallback_offer_price'] !== null ? (float) $row['fallback_offer_price'] : null;
+            $fallbackOfferValidTo = ($row['fallback_offer_valid_to'] !== null) ? (string) $row['fallback_offer_valid_to'] : null;
             $fallbackOfferTitle = trim((string) ($row['fallback_offer_title'] ?? ''));
             $fallbackOfferStore = trim((string) ($row['fallback_offer_store'] ?? ''));
+
+            if (!isOfferValidInCurrentWeek($storedOfferValidTo)) {
+                $storedOfferId = null;
+                $storedOfferPrice = null;
+                $storedOfferValidTo = null;
+            }
+            if (!isOfferValidInCurrentWeek($fallbackOfferValidTo)) {
+                $exactFallbackPrice = null;
+                $fallbackOfferValidTo = null;
+                $fallbackOfferTitle = '';
+                $fallbackOfferStore = '';
+            }
 
             $offerSource = 'none';
             if ($storedOfferId !== null && $storedOfferId > 0) {
@@ -1342,9 +1933,9 @@ function handleShoppingList(PDO $pdo): void
                 'offer_price' => ($storedOfferPrice !== null)
                     ? $storedOfferPrice
                     : $exactFallbackPrice,
-                'offer_valid_to' => ($row['offer_valid_until'] !== null)
-                    ? (string) $row['offer_valid_until']
-                    : (($row['fallback_offer_valid_to'] !== null) ? (string) $row['fallback_offer_valid_to'] : null),
+                'offer_valid_to' => ($storedOfferPrice !== null)
+                    ? $storedOfferValidTo
+                    : $fallbackOfferValidTo,
                 'offer_store' => $fallbackOfferStore,
                 'offer_source' => $offerSource,
                 'offer_match_score' => null,
@@ -1646,6 +2237,26 @@ function knownFoodKeywords(string $value): array
     return array_keys($hits);
 }
 
+function isOfferValidInCurrentWeek(?string $validTo): bool
+{
+    if ($validTo === null) {
+        return false;
+    }
+
+    $value = trim((string) $validTo);
+    if ($value === '') {
+        return false;
+    }
+
+    $toTs = strtotime($value);
+    if ($toTs === false) {
+        return false;
+    }
+
+    $todayTs = strtotime(date('Y-m-d'));
+    return $toTs >= $todayTs;
+}
+
 function scoreShoppingTitleMatch(string $shoppingTitle, string $offerTitle): float
 {
     $aNorm = normalizeShoppingMatchText($shoppingTitle);
@@ -1692,11 +2303,14 @@ function resolveBestOfferForShoppingItem(PDO $pdo, string $productName, string $
     }
 
     $normalizedStore = normalizeShoppingMatchText($preferredStore);
+    $today = new DateTimeImmutable('today');
 
     $sql = 'SELECT id, store_name, title, price, valid_to, created_at
             FROM store_offers
-            WHERE (valid_to IS NULL OR valid_to >= CURDATE())';
-    $params = [];
+                        WHERE (valid_from IS NULL OR valid_from <= ?)
+                            AND valid_to IS NOT NULL
+              AND valid_to >= ?';
+    $params = [$today->format('Y-m-d'), $today->format('Y-m-d')];
 
     if ($normalizedStore !== '') {
         $sql .= ' AND LOWER(TRIM(store_name)) = LOWER(TRIM(?))';
@@ -1768,14 +2382,17 @@ function resolveOfferSuggestionsForShoppingItem(PDO $pdo, string $productName, i
         $limit = 20;
     }
 
+    $today = new DateTimeImmutable('today');
     $stmt = $pdo->prepare(
         'SELECT id, store_name, title, price, valid_to, created_at
          FROM store_offers
-         WHERE (valid_to IS NULL OR valid_to >= CURDATE())
+                                 WHERE (valid_from IS NULL OR valid_from <= ?)
+                                     AND valid_to IS NOT NULL
+                     AND valid_to >= ?
          ORDER BY created_at DESC, id DESC
          LIMIT 800'
     );
-    $stmt->execute();
+    $stmt->execute([$today->format('Y-m-d'), $today->format('Y-m-d')]);
     $offers = $stmt->fetchAll() ?: [];
 
     $candidates = [];
@@ -1911,26 +2528,600 @@ function handleShoppingListOfferSuggestions(PDO $pdo): void
     }
 }
 
+function buildRecipeSelectColumns(PDO $pdo): string
+{
+    $columns = [
+        'id',
+        'owner_household_id',
+        'title',
+        'description',
+        'source_type',
+        'source_reference',
+        'is_shared',
+        'created_at',
+        'updated_at',
+    ];
+
+    foreach (['locale', 'servings', 'total_minutes', 'is_danish_verified', 'import_score'] as $optionalColumn) {
+        if (recipesHasColumn($pdo, $optionalColumn)) {
+            $columns[] = $optionalColumn;
+        }
+    }
+
+    return implode(', ', $columns);
+}
+
+function insertRecipeRecord(PDO $pdo, int $householdId, array $recipePayload): int
+{
+    $columns = ['owner_household_id', 'title', 'description', 'source_type', 'source_reference', 'is_shared'];
+    $values = [
+        $householdId,
+        trim((string) ($recipePayload['title'] ?? '')),
+        trim((string) ($recipePayload['description'] ?? '')),
+        (string) ($recipePayload['source_type'] ?? 'manual'),
+        trim((string) ($recipePayload['source_reference'] ?? '')),
+        0,
+    ];
+
+    if (recipesHasColumn($pdo, 'locale')) {
+        $columns[] = 'locale';
+        $values[] = (string) ($recipePayload['locale'] ?? 'da-DK');
+    }
+    if (recipesHasColumn($pdo, 'servings')) {
+        $columns[] = 'servings';
+        $values[] = isset($recipePayload['servings']) ? (int) $recipePayload['servings'] : null;
+    }
+    if (recipesHasColumn($pdo, 'total_minutes')) {
+        $columns[] = 'total_minutes';
+        $values[] = isset($recipePayload['total_minutes']) ? (int) $recipePayload['total_minutes'] : null;
+    }
+    if (recipesHasColumn($pdo, 'is_danish_verified')) {
+        $columns[] = 'is_danish_verified';
+        $values[] = !empty($recipePayload['is_danish_verified']) ? 1 : 0;
+    }
+    if (recipesHasColumn($pdo, 'import_score')) {
+        $columns[] = 'import_score';
+        $values[] = isset($recipePayload['import_score']) ? (float) $recipePayload['import_score'] : null;
+    }
+
+    $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+    $sql = 'INSERT INTO recipes (' . implode(', ', $columns) . ') VALUES (' . $placeholders . ')';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($values);
+
+    return (int) $pdo->lastInsertId();
+}
+
+function insertRecipeIngredients(PDO $pdo, int $recipeId, array $ingredients): int
+{
+    if ($ingredients === []) {
+        return 0;
+    }
+
+    $stmt = $pdo->prepare(
+        'INSERT INTO recipe_ingredients (recipe_id, ingredient_name, quantity, unit)
+         VALUES (?, ?, ?, ?)'
+    );
+
+    $count = 0;
+    foreach ($ingredients as $ingredient) {
+        if (is_string($ingredient)) {
+            $name = trim($ingredient);
+            $quantity = null;
+            $unit = null;
+        } else {
+            $name = trim((string) ($ingredient['name'] ?? ''));
+            $quantity = isset($ingredient['quantity']) && $ingredient['quantity'] !== '' ? (float) $ingredient['quantity'] : null;
+            $unit = isset($ingredient['unit']) ? trim((string) $ingredient['unit']) : null;
+        }
+
+        if ($name === '') {
+            continue;
+        }
+
+        $stmt->execute([$recipeId, $name, $quantity, $unit !== '' ? $unit : null]);
+        $count++;
+    }
+
+    return $count;
+}
+
+function insertRecipeSteps(PDO $pdo, int $recipeId, array $steps): int
+{
+    if ($steps === [] || !tableExists($pdo, 'recipe_steps')) {
+        return 0;
+    }
+
+    $stmt = $pdo->prepare(
+        'INSERT INTO recipe_steps (recipe_id, step_number, instruction)
+         VALUES (?, ?, ?)'
+    );
+
+    $count = 0;
+    $stepNumber = 1;
+    foreach ($steps as $step) {
+        $instruction = trim((string) $step);
+        if ($instruction === '') {
+            continue;
+        }
+        $stmt->execute([$recipeId, $stepNumber, $instruction]);
+        $stepNumber++;
+        $count++;
+    }
+
+    return $count;
+}
+
 function handleRecipeList(PDO $pdo): void
 {
     $session = requireAuthenticatedSession($pdo);
     $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
     $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+    $includeDetails = isset($_GET['include']) && strtolower((string) $_GET['include']) === 'details';
 
     try {
         $stmt = $pdo->prepare(
-            'SELECT id, owner_household_id, title, description, source_type, source_reference, is_shared, created_at, updated_at
+            'SELECT ' . buildRecipeSelectColumns($pdo) . '
              FROM recipes
              WHERE owner_household_id = ?
              ORDER BY title ASC, id ASC'
         );
         $stmt->execute([$householdId]);
+        $recipes = $stmt->fetchAll() ?: [];
+
+        if ($includeDetails && $recipes !== []) {
+            $ids = array_map(static fn(array $row): int => (int) ($row['id'] ?? 0), $recipes);
+            $ids = array_values(array_filter($ids, static fn(int $id): bool => $id > 0));
+            if ($ids !== []) {
+                $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+                $ingStmt = $pdo->prepare(
+                    'SELECT recipe_id, ingredient_name, quantity, unit
+                     FROM recipe_ingredients
+                     WHERE recipe_id IN (' . $placeholders . ')
+                     ORDER BY recipe_id ASC, id ASC'
+                );
+                $ingStmt->execute($ids);
+                $ingredientsByRecipe = [];
+                foreach ($ingStmt->fetchAll() ?: [] as $row) {
+                    $rid = (int) ($row['recipe_id'] ?? 0);
+                    $ingredientsByRecipe[$rid][] = [
+                        'name' => (string) ($row['ingredient_name'] ?? ''),
+                        'quantity' => $row['quantity'] !== null ? (float) $row['quantity'] : null,
+                        'unit' => $row['unit'] !== null ? (string) $row['unit'] : null,
+                    ];
+                }
+
+                $stepsByRecipe = [];
+                if (tableExists($pdo, 'recipe_steps')) {
+                    $stepStmt = $pdo->prepare(
+                        'SELECT recipe_id, step_number, instruction
+                         FROM recipe_steps
+                         WHERE recipe_id IN (' . $placeholders . ')
+                         ORDER BY recipe_id ASC, step_number ASC'
+                    );
+                    $stepStmt->execute($ids);
+                    foreach ($stepStmt->fetchAll() ?: [] as $row) {
+                        $rid = (int) ($row['recipe_id'] ?? 0);
+                        $stepsByRecipe[$rid][] = [
+                            'step_number' => (int) ($row['step_number'] ?? 0),
+                            'instruction' => (string) ($row['instruction'] ?? ''),
+                        ];
+                    }
+                }
+
+                foreach ($recipes as &$recipe) {
+                    $rid = (int) ($recipe['id'] ?? 0);
+                    $recipe['ingredients'] = $ingredientsByRecipe[$rid] ?? [];
+                    $recipe['steps'] = $stepsByRecipe[$rid] ?? [];
+                }
+                unset($recipe);
+            }
+        }
 
         response(200, [
             'status' => 'ok',
-            'recipes' => $stmt->fetchAll() ?: [],
+            'recipes' => $recipes,
         ]);
     } catch (Throwable $e) {
+        response(500, [
+            'error' => 'Database error',
+            'message' => $e->getMessage(),
+        ]);
+    }
+}
+
+function handleRecipeDelete(PDO $pdo): void
+{
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    $data = parseJsonInput() ?: [];
+    $recipeId = (int) ($data['recipe_id'] ?? 0);
+    if ($recipeId <= 0) {
+        response(400, ['error' => 'Missing recipe_id']);
+        return;
+    }
+
+    // Verify recipe belongs to this household
+    $stmt = $pdo->prepare('SELECT id FROM recipes WHERE id = ? AND owner_household_id = ? LIMIT 1');
+    $stmt->execute([$recipeId, $householdId]);
+    if (!$stmt->fetch()) {
+        response(404, ['error' => 'Recipe not found']);
+        return;
+    }
+
+    $pdo->beginTransaction();
+    $pdo->prepare('DELETE FROM meal_plan_days WHERE recipe_id = ?')->execute([$recipeId]);
+    $pdo->prepare('DELETE FROM recipe_ingredients WHERE recipe_id = ?')->execute([$recipeId]);
+    $pdo->prepare('DELETE FROM recipe_steps WHERE recipe_id = ?')->execute([$recipeId]);
+    $pdo->prepare('DELETE FROM recipes WHERE id = ? AND owner_household_id = ?')->execute([$recipeId, $householdId]);
+    $pdo->commit();
+
+    response(200, ['status' => 'deleted', 'recipe_id' => $recipeId]);
+}
+
+function handleRecipeCreate(PDO $pdo): void
+{
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    $data = parseJsonInput() ?: [];
+    $title = trim((string) ($data['title'] ?? ''));
+    $description = trim((string) ($data['description'] ?? ''));
+    $ingredients = is_array($data['ingredients'] ?? null) ? $data['ingredients'] : [];
+    $steps = is_array($data['steps'] ?? null) ? $data['steps'] : [];
+
+    if ($title === '') {
+        response(400, ['error' => 'Missing title']);
+        return;
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $recipeId = insertRecipeRecord($pdo, $householdId, [
+            'title' => $title,
+            'description' => $description,
+            'source_type' => 'manual',
+            'source_reference' => null,
+            'locale' => 'da-DK',
+            'servings' => isset($data['servings']) ? (int) $data['servings'] : null,
+            'total_minutes' => isset($data['total_minutes']) ? (int) $data['total_minutes'] : null,
+            'is_danish_verified' => true,
+            'import_score' => 1.0,
+        ]);
+
+        $ingredientCount = insertRecipeIngredients($pdo, $recipeId, $ingredients);
+        $stepCount = insertRecipeSteps($pdo, $recipeId, $steps);
+
+        $pdo->commit();
+
+        response(201, [
+            'status' => 'ok',
+            'recipe_id' => $recipeId,
+            'ingredients_added' => $ingredientCount,
+            'steps_added' => $stepCount,
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        response(500, [
+            'error' => 'Database error',
+            'message' => $e->getMessage(),
+        ]);
+    }
+}
+
+function handleRecipeExtractUrl(PDO $pdo): void
+{
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    $data = parseJsonInput() ?: [];
+    $url = trim((string) ($data['url'] ?? ''));
+    if ($url === '' || filter_var($url, FILTER_VALIDATE_URL) === false) {
+        response(400, ['error' => 'Missing or invalid url']);
+        return;
+    }
+
+    try {
+        $rawHtml = fetchRecipeHtmlFromUrl($url);
+
+        // Claude-first extraction (as requested), fallback to old flow if unavailable.
+        $recipeJson = extractRecipeWithAiFromHtml($rawHtml);
+        if (!is_array($recipeJson)) {
+            $recipeJson = fetchRecipeJsonLdFromUrl($url);
+            if (empty($recipeJson['ai_cleaned'])) {
+                $recipeJson = cleanRecipeWithAi($recipeJson);
+            }
+        }
+
+        $title = trim((string) ($recipeJson['name'] ?? ''));
+        if ($title === '') {
+            response(422, ['error' => 'Could not extract recipe title from URL']);
+            return;
+        }
+
+        $description = trim(strip_tags((string) ($recipeJson['description'] ?? '')));
+        $ingredients = is_array($recipeJson['recipeIngredient'] ?? null)
+            ? array_values(array_filter(array_map(static fn($line): string => trim((string) $line), $recipeJson['recipeIngredient']), static fn(string $line): bool => $line !== ''))
+            : [];
+
+        $steps = extractRecipeInstructionsAsSteps($recipeJson['recipeInstructions'] ?? null);
+        $servings = parseRecipeYieldToServings($recipeJson['recipeYield'] ?? null);
+
+        $totalMinutes = parseIso8601DurationToMinutes((string) ($recipeJson['totalTime'] ?? ''));
+        if ($totalMinutes === null) {
+            $prep = parseIso8601DurationToMinutes((string) ($recipeJson['prepTime'] ?? '')) ?? 0;
+            $cook = parseIso8601DurationToMinutes((string) ($recipeJson['cookTime'] ?? '')) ?? 0;
+            $sum = $prep + $cook;
+            $totalMinutes = $sum > 0 ? $sum : null;
+        }
+
+        response(200, [
+            'status' => 'ok',
+            'title' => $title,
+            'description' => $description,
+            'servings' => $servings,
+            'total_minutes' => $totalMinutes,
+            'ingredients' => $ingredients,
+            'steps' => $steps,
+        ]);
+    } catch (RuntimeException $e) {
+        response(422, [
+            'error' => 'Could not parse recipe from URL',
+            'message' => $e->getMessage(),
+        ]);
+    } catch (Throwable $e) {
+        response(500, [
+            'error' => 'Recipe extraction failed',
+            'message' => $e->getMessage(),
+        ]);
+    }
+}
+
+function handleRecipeImportUrl(PDO $pdo): void
+{
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    $data = parseJsonInput() ?: [];
+    $url = trim((string) ($data['url'] ?? ''));
+    if ($url === '' || filter_var($url, FILTER_VALIDATE_URL) === false) {
+        response(400, ['error' => 'Missing or invalid url']);
+        return;
+    }
+
+    try {
+        $rawHtml = fetchRecipeHtmlFromUrl($url);
+
+        // Claude-first extraction (as requested), fallback to old flow if unavailable.
+        $recipeJson = extractRecipeWithAiFromHtml($rawHtml);
+        if (!is_array($recipeJson)) {
+            $recipeJson = fetchRecipeJsonLdFromUrl($url);
+            if (empty($recipeJson['ai_cleaned'])) {
+                $recipeJson = cleanRecipeWithAi($recipeJson);
+            }
+        }
+
+        $title = trim((string) ($recipeJson['name'] ?? ''));
+        if ($title === '') {
+            response(422, ['error' => 'Could not extract recipe title from URL']);
+            return;
+        }
+
+        $description = trim(strip_tags((string) ($recipeJson['description'] ?? '')));
+        $ingredients = is_array($recipeJson['recipeIngredient'] ?? null)
+            ? array_values(array_filter(array_map(static fn($line): string => trim((string) $line), $recipeJson['recipeIngredient']), static fn(string $line): bool => $line !== ''))
+            : [];
+
+        $steps = extractRecipeInstructionsAsSteps($recipeJson['recipeInstructions'] ?? null);
+        $servings = parseRecipeYieldToServings($recipeJson['recipeYield'] ?? null);
+
+        $totalMinutes = parseIso8601DurationToMinutes((string) ($recipeJson['totalTime'] ?? ''));
+        if ($totalMinutes === null) {
+            $prep = parseIso8601DurationToMinutes((string) ($recipeJson['prepTime'] ?? '')) ?? 0;
+            $cook = parseIso8601DurationToMinutes((string) ($recipeJson['cookTime'] ?? '')) ?? 0;
+            $sum = $prep + $cook;
+            $totalMinutes = $sum > 0 ? $sum : null;
+        }
+
+        $signal = computeDanishRecipeSignal($title, $description, $ingredients, $steps);
+
+        $pdo->beginTransaction();
+        $recipeId = insertRecipeRecord($pdo, $householdId, [
+            'title' => $title,
+            'description' => $description,
+            'source_type' => 'external_api',
+            'source_reference' => $url,
+            'locale' => 'da-DK',
+            'servings' => $servings,
+            'total_minutes' => $totalMinutes,
+            'is_danish_verified' => (bool) $signal['is_danish'],
+            'import_score' => (float) $signal['score'],
+        ]);
+
+        $ingredientCount = insertRecipeIngredients($pdo, $recipeId, $ingredients);
+        $stepCount = insertRecipeSteps($pdo, $recipeId, $steps);
+
+        $pdo->commit();
+
+        response(201, [
+            'status' => 'ok',
+            'recipe_id' => $recipeId,
+            'title' => $title,
+            'danish_score' => (float) $signal['score'],
+            'is_danish' => (bool) $signal['is_danish'],
+            'import_status' => !empty($signal['is_danish']) ? 'accepted' : 'review_required',
+            'ingredients_added' => $ingredientCount,
+            'steps_added' => $stepCount,
+        ]);
+    } catch (RuntimeException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        // User-facing errors from JSON-LD parsing should be 422
+        response(422, [
+            'error' => 'Could not parse recipe from URL',
+            'message' => $e->getMessage(),
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        response(500, [
+            'error' => 'Import failed',
+            'message' => $e->getMessage(),
+        ]);
+    }
+}
+
+function handleMealPlanCurrent(PDO $pdo): void
+{
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    if (!tableExists($pdo, 'meal_plans') || !tableExists($pdo, 'meal_plan_days')) {
+        response(503, ['error' => 'Meal plan tables missing. Run migration first.']);
+        return;
+    }
+
+    $weekStart = trim((string) ($_GET['week_start'] ?? ''));
+    if ($weekStart === '') {
+        $weekStart = (new DateTimeImmutable('monday this week'))->format('Y-m-d');
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT mp.id, mp.week_start, mp.household_id
+             FROM meal_plans mp
+             WHERE mp.household_id = ? AND mp.week_start = ?
+             LIMIT 1'
+        );
+        $stmt->execute([$householdId, $weekStart]);
+        $plan = $stmt->fetch();
+
+        if (!$plan) {
+            response(200, [
+                'status' => 'ok',
+                'meal_plan' => null,
+                'days' => [],
+            ]);
+            return;
+        }
+
+        $dayStmt = $pdo->prepare(
+            'SELECT mpd.day_date, mpd.recipe_id, mpd.note, r.title AS recipe_title
+             FROM meal_plan_days mpd
+             LEFT JOIN recipes r ON r.id = mpd.recipe_id
+             WHERE mpd.meal_plan_id = ?
+             ORDER BY mpd.day_date ASC'
+        );
+        $dayStmt->execute([(int) $plan['id']]);
+
+        response(200, [
+            'status' => 'ok',
+            'meal_plan' => $plan,
+            'days' => $dayStmt->fetchAll() ?: [],
+        ]);
+    } catch (Throwable $e) {
+        response(500, [
+            'error' => 'Database error',
+            'message' => $e->getMessage(),
+        ]);
+    }
+}
+
+function handleMealPlanSetDay(PDO $pdo): void
+{
+    $session = requireAuthenticatedSession($pdo);
+    $requestedHouseholdId = isset($_GET['household_id']) ? (int) $_GET['household_id'] : null;
+    $householdId = resolveAccessibleHouseholdId($pdo, $session, $requestedHouseholdId);
+
+    if (!tableExists($pdo, 'meal_plans') || !tableExists($pdo, 'meal_plan_days')) {
+        response(503, ['error' => 'Meal plan tables missing. Run migration first.']);
+        return;
+    }
+
+    $data = parseJsonInput() ?: [];
+    $dayDate = trim((string) ($data['day_date'] ?? ''));
+    $recipeId = (int) ($data['recipe_id'] ?? 0);
+    $note = trim((string) ($data['note'] ?? ''));
+
+    if ($dayDate === '' || preg_match('/^\d{4}-\d{2}-\d{2}$/', $dayDate) !== 1) {
+        response(400, ['error' => 'Missing or invalid day_date (YYYY-MM-DD)']);
+        return;
+    }
+    if ($recipeId <= 0) {
+        response(400, ['error' => 'Missing or invalid recipe_id']);
+        return;
+    }
+
+    $weekStart = (new DateTimeImmutable($dayDate))->modify('monday this week')->format('Y-m-d');
+
+    try {
+        $pdo->beginTransaction();
+
+        $recipeStmt = $pdo->prepare(
+            'SELECT id
+             FROM recipes
+             WHERE id = ? AND owner_household_id = ?
+             LIMIT 1'
+        );
+        $recipeStmt->execute([$recipeId, $householdId]);
+        if (!$recipeStmt->fetch()) {
+            $pdo->rollBack();
+            response(404, ['error' => 'Recipe not found in this household']);
+            return;
+        }
+
+        $planStmt = $pdo->prepare(
+            'SELECT id
+             FROM meal_plans
+             WHERE household_id = ? AND week_start = ?
+             LIMIT 1'
+        );
+        $planStmt->execute([$householdId, $weekStart]);
+        $plan = $planStmt->fetch();
+
+        if ($plan) {
+            $mealPlanId = (int) $plan['id'];
+        } else {
+            $createPlanStmt = $pdo->prepare(
+                'INSERT INTO meal_plans (household_id, week_start, created_by_user_id)
+                 VALUES (?, ?, ?)'
+            );
+            $createPlanStmt->execute([$householdId, $weekStart, $session['user_id'] ?? null]);
+            $mealPlanId = (int) $pdo->lastInsertId();
+        }
+
+        $upsertStmt = $pdo->prepare(
+            'INSERT INTO meal_plan_days (meal_plan_id, day_date, recipe_id, note)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE recipe_id = VALUES(recipe_id), note = VALUES(note), updated_at = CURRENT_TIMESTAMP'
+        );
+        $upsertStmt->execute([$mealPlanId, $dayDate, $recipeId, $note !== '' ? $note : null]);
+
+        $pdo->commit();
+
+        response(200, [
+            'status' => 'ok',
+            'meal_plan_id' => $mealPlanId,
+            'day_date' => $dayDate,
+            'recipe_id' => $recipeId,
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
         response(500, [
             'error' => 'Database error',
             'message' => $e->getMessage(),

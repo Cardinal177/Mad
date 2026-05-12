@@ -51,6 +51,36 @@ try {
         exit;
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'recipes.create') {
+        handleRecipeCreate($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'recipes.import_url') {
+        handleRecipeImportUrl($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'recipes.extract_url') {
+        handleRecipeExtractUrl($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'DELETE' && $endpoint === 'recipes.delete') {
+        handleRecipeDelete($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'mealplan.current') {
+        handleMealPlanCurrent($pdo);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $endpoint === 'mealplan.set_day') {
+        handleMealPlanSetDay($pdo);
+        exit;
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'GET' && $endpoint === 'shopping.candidates') {
         handleShoppingCandidates($pdo);
         exit;
@@ -254,7 +284,13 @@ try {
             '/api.php?endpoint=products' => 'Current inventory product list',
             '/api.php?endpoint=recent' => 'Recent inventory scan movements',
             '/api.php?endpoint=locations' => 'Household locations for authenticated user',
-            '/api.php?endpoint=recipes' => 'Household recipes for authenticated user',
+            '/api.php?endpoint=recipes' => 'GET household recipes for authenticated user (use include=details for ingredients/steps)',
+            '/api.php?endpoint=recipes.create' => 'POST create recipe manually (title, ingredients, steps, servings, total_minutes)',
+            '/api.php?endpoint=recipes.import_url' => 'POST import one recipe URL (Claude-first extraction + fallback parsing)',
+            '/api.php?endpoint=recipes.extract_url' => 'POST extract one recipe URL to editable fields (no DB insert)',
+            '/api.php?endpoint=recipes.delete' => 'DELETE one recipe by recipe_id for authenticated household',
+            '/api.php?endpoint=mealplan.current' => 'GET meal plan for one week (week_start=YYYY-MM-DD)',
+            '/api.php?endpoint=mealplan.set_day' => 'POST assign recipe to one day in meal plan',
             '/api.php?endpoint=shopping.candidates' => 'GET shopping candidates (minimum reached + manual list) with active offers',
             '/api.php?endpoint=shopping.list' => 'GET active shopping list for authenticated household',
             '/api.php?endpoint=shopping.list.offer_suggestions' => 'GET cross-store offer suggestions for one shopping list item',
