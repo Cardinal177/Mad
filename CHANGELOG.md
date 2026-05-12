@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.36] - 2026-05-12 18:25
+
+### Changed
+- Add delete button on recipe cards with DELETE API endpoint
+
+
 ## [0.2.35] - 2026-05-12 18:23
 
 ### Changed
