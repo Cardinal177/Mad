@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.37] - 2026-05-12 18:26
+
+### Changed
+- Fix recipe delete: remove meal_plan_days references before deleting recipe
+
+
 ## [0.2.36] - 2026-05-12 18:25
 
 ### Changed
