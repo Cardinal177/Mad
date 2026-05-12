@@ -1041,6 +1041,8 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             max-width: 680px;
             max-height: 92vh;
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
             padding: 24px 20px 40px;
             display: flex;
             flex-direction: column;
@@ -1112,7 +1114,8 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
             background: rgba(255,255,255,0.6);
             border: 1px solid rgba(20,35,29,0.07);
             border-radius: 14px;
-            overflow: hidden;
+            overflow: auto;
+            max-height: min(42vh, 360px);
         }
         .recipe-ingredient-row {
             display: flex;
@@ -1135,6 +1138,9 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
         .recipe-modal-steps {
             display: grid;
             gap: 8px;
+            max-height: min(36vh, 320px);
+            overflow: auto;
+            padding-right: 4px;
         }
         .recipe-step-row {
             display: flex;
@@ -6096,6 +6102,10 @@ function openRecipeModal(recipe) {
     // Ingredients
     const ingEl = document.getElementById('recipeModalIngredients');
     const ings = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+    const ingTitleEl = document.getElementById('recipeModalIngredientsTitle');
+    if (ingTitleEl) {
+        ingTitleEl.textContent = `Ingredienser (${ings.length})`;
+    }
     ingEl.innerHTML = ings.length
         ? ings.map(i => `<div class="recipe-ingredient-row"><span class="recipe-ingredient-name">${esc(i.name || i)}</span><span class="recipe-ingredient-qty">${esc(i.quantity || '')}</span></div>`).join('')
         : '<div class="recipe-ingredient-row" style="color:var(--muted);">Ingen ingredienser registreret</div>';
@@ -6103,6 +6113,10 @@ function openRecipeModal(recipe) {
     // Steps
     const stepsEl = document.getElementById('recipeModalSteps');
     const steps = Array.isArray(recipe.steps) ? recipe.steps : [];
+    const stepTitleEl = document.getElementById('recipeModalStepsTitle');
+    if (stepTitleEl) {
+        stepTitleEl.textContent = `Fremgangsmåde (${steps.length})`;
+    }
     stepsEl.innerHTML = steps.length
         ? steps.map((s, i) => `<div class="recipe-step-row"><span class="recipe-step-num">${i+1}</span><span class="recipe-step-text">${esc(s.instruction || s)}</span></div>`).join('')
         : '<div class="recipe-step-row" style="color:var(--muted);">Ingen trin registreret</div>';
@@ -6372,9 +6386,9 @@ setInterval(() => {
     </div>
     <p class="recipe-modal-desc" id="recipeModalDesc"></p>
     <div class="recipe-modal-stats" id="recipeModalStats"></div>
-    <h3 class="recipe-modal-section-title">Ingredienser</h3>
+    <h3 class="recipe-modal-section-title" id="recipeModalIngredientsTitle">Ingredienser</h3>
     <div class="recipe-modal-ingredients" id="recipeModalIngredients"></div>
-    <h3 class="recipe-modal-section-title">Fremgangsmåde</h3>
+    <h3 class="recipe-modal-section-title" id="recipeModalStepsTitle">Fremgangsmåde</h3>
     <div class="recipe-modal-steps" id="recipeModalSteps"></div>
     <div class="recipe-modal-actions">
       <button class="admin-button" id="recipeModalAssign" data-recipe-id="" data-recipe-action="assign-to-day" type="button" style="width:100%;">📅 Tildel til madplan</button>
