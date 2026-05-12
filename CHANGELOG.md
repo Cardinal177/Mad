@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.45] - 2026-05-12 18:52
+
+### Changed
+- Fix recipe modal clipping: scrollable ingredients/steps and visible counts
+
+
 ## [0.2.44] - 2026-05-12 18:50
 
 ### Changed
