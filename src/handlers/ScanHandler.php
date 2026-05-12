@@ -471,6 +471,12 @@ function fetchRecipeJsonLdFromUrl(string $url): array
         }
     }
 
+    // Try HTML microdata extraction (e.g., itemprop recipeIngredient/recipeInstructions)
+    $microData = extractRecipeFromMicrodataHtml($html);
+    if ($microData !== null) {
+        return $microData;
+    }
+
     // Try AI extraction directly from raw HTML (much more reliable than regex)
     $aiResult = extractRecipeWithAiFromHtml($html);
     if ($aiResult !== null) {
@@ -508,6 +514,88 @@ function stripHtmlForAi(string $html): string
     $html = preg_replace('/[ \t]+/', ' ', $html);
     $html = preg_replace('/\n{3,}/', "\n\n", $html);
     return mb_substr(trim($html), 0, 20000);
+}
+
+function extractRecipeFromMicrodataHtml(string $html): ?array
+{
+    if (!str_contains($html, 'itemprop="recipeIngredient"') || !str_contains($html, 'itemprop="recipeInstructions"')) {
+        return null;
+    }
+
+    $title = '';
+    if (preg_match('/<h2[^>]*itemprop="name"[^>]*>(.*?)<\/h2>/is', $html, $m) === 1) {
+        $title = trim(html_entity_decode(strip_tags((string) $m[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    }
+    if ($title === '' && preg_match('/<h1[^>]*>(.*?)<\/h1>/is', $html, $m) === 1) {
+        $title = trim(html_entity_decode(strip_tags((string) $m[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    }
+    if ($title === '') {
+        return null;
+    }
+
+    $description = '';
+    if (preg_match('/<meta\s+property="og:description"\s+content="([^"]+)"/i', $html, $m) === 1) {
+        $description = trim(html_entity_decode((string) $m[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    }
+
+    $ingredients = [];
+    if (preg_match_all('/<li[^>]*itemprop="recipeIngredient"[^>]*>(.*?)<\/li>/is', $html, $matches)) {
+        foreach ($matches[1] as $item) {
+            $line = trim(html_entity_decode(strip_tags((string) $item), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            $line = preg_replace('/\s+/u', ' ', $line);
+            if ($line !== '') {
+                $ingredients[] = $line;
+            }
+        }
+    }
+
+    $steps = [];
+    if (preg_match('/<div[^>]*itemprop="recipeInstructions"[^>]*>(.*?)<\/div>/is', $html, $instructionsMatch) === 1) {
+        $instructionsHtml = (string) $instructionsMatch[1];
+        if (preg_match_all('/<p[^>]*>(.*?)<\/p>/is', $instructionsHtml, $paragraphs)) {
+            foreach ($paragraphs[1] as $paragraph) {
+                $text = trim(html_entity_decode(strip_tags((string) $paragraph), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                $text = preg_replace('/\s+/u', ' ', $text);
+                if ($text !== '') {
+                    $steps[] = $text;
+                }
+            }
+        }
+    }
+
+    if ($ingredients === [] || $steps === []) {
+        return null;
+    }
+
+    $recipeYield = '4';
+    if (preg_match('/<span[^>]*itemprop="recipeYield"[^>]*>(.*?)<\/span>/is', $html, $m) === 1) {
+        $recipeYield = trim(html_entity_decode(strip_tags((string) $m[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    }
+
+    $prepTime = 'PT15M';
+    $cookTime = 'PT30M';
+    $totalTime = 'PT45M';
+    if (preg_match('/<span[^>]*itemprop="prepTime"[^>]*>(.*?)<\/span>/is', $html, $m) === 1) {
+        $prepTime = trim((string) $m[1]);
+    }
+    if (preg_match('/<span[^>]*itemprop="cookTime"[^>]*>(.*?)<\/span>/is', $html, $m) === 1) {
+        $cookTime = trim((string) $m[1]);
+    }
+    if (preg_match('/<span[^>]*itemprop="totalTime"[^>]*>(.*?)<\/span>/is', $html, $m) === 1) {
+        $totalTime = trim((string) $m[1]);
+    }
+
+    return [
+        'name' => $title,
+        'description' => $description,
+        'recipeIngredient' => $ingredients,
+        'recipeInstructions' => array_map(static fn(string $step): array => ['text' => $step], $steps),
+        'recipeYield' => $recipeYield,
+        'prepTime' => $prepTime,
+        'cookTime' => $cookTime,
+        'totalTime' => $totalTime,
+        'ai_cleaned' => true,
+    ];
 }
 
 function extractRecipeWithAiFromHtml(string $html): ?array
@@ -2830,15 +2918,9 @@ function handleRecipeExtractUrl(PDO $pdo): void
     }
 
     try {
-        $rawHtml = fetchRecipeHtmlFromUrl($url);
-
-        // Claude-first extraction (as requested), fallback to old flow if unavailable.
-        $recipeJson = extractRecipeWithAiFromHtml($rawHtml);
-        if (!is_array($recipeJson)) {
-            $recipeJson = fetchRecipeJsonLdFromUrl($url);
-            if (empty($recipeJson['ai_cleaned'])) {
-                $recipeJson = cleanRecipeWithAi($recipeJson);
-            }
+        $recipeJson = fetchRecipeJsonLdFromUrl($url);
+        if (empty($recipeJson['ai_cleaned'])) {
+            $recipeJson = cleanRecipeWithAi($recipeJson);
         }
 
         $title = trim((string) ($recipeJson['name'] ?? ''));
@@ -2899,15 +2981,9 @@ function handleRecipeImportUrl(PDO $pdo): void
     }
 
     try {
-        $rawHtml = fetchRecipeHtmlFromUrl($url);
-
-        // Claude-first extraction (as requested), fallback to old flow if unavailable.
-        $recipeJson = extractRecipeWithAiFromHtml($rawHtml);
-        if (!is_array($recipeJson)) {
-            $recipeJson = fetchRecipeJsonLdFromUrl($url);
-            if (empty($recipeJson['ai_cleaned'])) {
-                $recipeJson = cleanRecipeWithAi($recipeJson);
-            }
+        $recipeJson = fetchRecipeJsonLdFromUrl($url);
+        if (empty($recipeJson['ai_cleaned'])) {
+            $recipeJson = cleanRecipeWithAi($recipeJson);
         }
 
         $title = trim((string) ($recipeJson['name'] ?? ''));
