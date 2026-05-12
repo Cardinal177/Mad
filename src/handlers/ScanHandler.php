@@ -539,12 +539,31 @@ function extractRecipeFromMicrodataHtml(string $html): ?array
     }
 
     $ingredients = [];
-    if (preg_match_all('/<li[^>]*itemprop="recipeIngredient"[^>]*>(.*?)<\/li>/is', $html, $matches)) {
-        foreach ($matches[1] as $item) {
-            $line = trim(html_entity_decode(strip_tags((string) $item), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-            $line = preg_replace('/\s+/u', ' ', $line);
-            if ($line !== '') {
-                $ingredients[] = $line;
+    if (preg_match('/<ul[^>]*class="[^"]*ingredientlist[^"]*"[^>]*>(.*?)<\/ul>/is', $html, $listMatch) === 1) {
+        $listHtml = (string) $listMatch[1];
+
+        if (preg_match_all('/<li\b([^>]*)>(.*?)<\/li>/is', $listHtml, $liMatches, PREG_SET_ORDER)) {
+            foreach ($liMatches as $liMatch) {
+                $attrs = (string) ($liMatch[1] ?? '');
+                $content = (string) ($liMatch[2] ?? '');
+                $line = trim(html_entity_decode(strip_tags($content), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                $line = preg_replace('/\s+/u', ' ', $line);
+
+                if ($line === '') {
+                    continue;
+                }
+
+                $isSectionHeader = preg_match('/class="[^"]*ingredient-header[^"]*"/i', $attrs) === 1;
+                $isIngredient = preg_match('/itemprop="recipeIngredient"/i', $attrs) === 1;
+
+                if ($isSectionHeader) {
+                    $ingredients[] = $line;
+                    continue;
+                }
+
+                if ($isIngredient) {
+                    $ingredients[] = $line;
+                }
             }
         }
     }
