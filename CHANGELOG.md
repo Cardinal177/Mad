@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.42] - 2026-05-12 18:40
+
+### Changed
+- Claude-first recipe extraction + manual recipe template with editable prefill
+
+
 ## [0.2.41] - 2026-05-12 18:35
 
 ### Changed
