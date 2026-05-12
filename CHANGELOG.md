@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.35] - 2026-05-12 18:23
+
+### Changed
+- Improve recipe extraction: skip cookie banners, anchor to recipe section, increase text limit to 14000 chars
+
+
 ## [0.2.34] - 2026-05-12 18:20
 
 ### Changed
