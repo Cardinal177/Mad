@@ -3010,18 +3010,70 @@ function handleRecipeImportUrl(PDO $pdo): void
 
         $signal = computeDanishRecipeSignal($title, $description, $ingredients, $steps);
 
+        $existingStmt = $pdo->prepare(
+            'SELECT id
+             FROM recipes
+             WHERE owner_household_id = ? AND source_reference = ?
+             LIMIT 1'
+        );
+        $existingStmt->execute([$householdId, $url]);
+        $existingRecipe = $existingStmt->fetch();
+
         $pdo->beginTransaction();
-        $recipeId = insertRecipeRecord($pdo, $householdId, [
-            'title' => $title,
-            'description' => $description,
-            'source_type' => 'external_api',
-            'source_reference' => $url,
-            'locale' => 'da-DK',
-            'servings' => $servings,
-            'total_minutes' => $totalMinutes,
-            'is_danish_verified' => (bool) $signal['is_danish'],
-            'import_score' => (float) $signal['score'],
-        ]);
+        $wasUpdated = false;
+        if ($existingRecipe && isset($existingRecipe['id'])) {
+            $recipeId = (int) $existingRecipe['id'];
+            $updateColumns = [
+                'title = ?',
+                'description = ?',
+                'source_type = ?',
+                'source_reference = ?',
+            ];
+            $updateValues = [$title, $description, 'external_api', $url];
+
+            if (recipesHasColumn($pdo, 'locale')) {
+                $updateColumns[] = 'locale = ?';
+                $updateValues[] = 'da-DK';
+            }
+            if (recipesHasColumn($pdo, 'servings')) {
+                $updateColumns[] = 'servings = ?';
+                $updateValues[] = $servings;
+            }
+            if (recipesHasColumn($pdo, 'total_minutes')) {
+                $updateColumns[] = 'total_minutes = ?';
+                $updateValues[] = $totalMinutes;
+            }
+            if (recipesHasColumn($pdo, 'is_danish_verified')) {
+                $updateColumns[] = 'is_danish_verified = ?';
+                $updateValues[] = (bool) $signal['is_danish'] ? 1 : 0;
+            }
+            if (recipesHasColumn($pdo, 'import_score')) {
+                $updateColumns[] = 'import_score = ?';
+                $updateValues[] = (float) $signal['score'];
+            }
+
+            $updateValues[] = $recipeId;
+            $updateStmt = $pdo->prepare('UPDATE recipes SET ' . implode(', ', $updateColumns) . ' WHERE id = ?');
+            $updateStmt->execute($updateValues);
+
+            $pdo->prepare('DELETE FROM recipe_ingredients WHERE recipe_id = ?')->execute([$recipeId]);
+            if (tableExists($pdo, 'recipe_steps')) {
+                $pdo->prepare('DELETE FROM recipe_steps WHERE recipe_id = ?')->execute([$recipeId]);
+            }
+            $wasUpdated = true;
+        } else {
+            $recipeId = insertRecipeRecord($pdo, $householdId, [
+                'title' => $title,
+                'description' => $description,
+                'source_type' => 'external_api',
+                'source_reference' => $url,
+                'locale' => 'da-DK',
+                'servings' => $servings,
+                'total_minutes' => $totalMinutes,
+                'is_danish_verified' => (bool) $signal['is_danish'],
+                'import_score' => (float) $signal['score'],
+            ]);
+        }
 
         $ingredientCount = insertRecipeIngredients($pdo, $recipeId, $ingredients);
         $stepCount = insertRecipeSteps($pdo, $recipeId, $steps);
@@ -3031,6 +3083,7 @@ function handleRecipeImportUrl(PDO $pdo): void
         response(201, [
             'status' => 'ok',
             'recipe_id' => $recipeId,
+            'updated_existing' => $wasUpdated,
             'title' => $title,
             'danish_score' => (float) $signal['score'],
             'is_danish' => (bool) $signal['is_danish'],

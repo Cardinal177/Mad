@@ -6197,10 +6197,11 @@ async function importRecipeFromUrl() {
         });
 
         const danish = payload.danish_score ? `danish_score: ${(payload.danish_score * 100).toFixed(0)}%` : 'unknown score';
+        const actionText = payload.updated_existing ? 'Opdateret' : 'Importeret';
         const resultDiv = document.getElementById('recipeImportResult');
         if (resultDiv) {
             resultDiv.innerHTML = `<div style="padding:10px; border-radius:10px; border:1px solid rgba(47,106,86,0.2); background:rgba(47,106,86,0.06);">
-                <strong>✓ Importeret:</strong> ${esc(payload.title || 'Opskrift')}<br>
+                <strong>✓ ${esc(actionText)}:</strong> ${esc(payload.title || 'Opskrift')}<br>
                 <span style="font-size:12px; color:var(--muted);">${esc(String(payload.ingredients_added || 0))} ingredienser, ${esc(String(payload.steps_added || 0))} trin (${danish})</span>
             </div>`;
         }
