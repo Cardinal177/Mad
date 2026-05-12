@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.39] - 2026-05-12 18:30
+
+### Changed
+- Fix recipe extraction: anchor to last occurrence of Ingredienser, increase limit to 20000 chars
+
+
 ## [0.2.38] - 2026-05-12 18:28
 
 ### Changed
