@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.43] - 2026-05-12 18:46
+
+### Changed
+- Use microdata parser (itemprop ingredients/instructions) before AI for Valdemarsro-style recipes
+
+
 ## [0.2.42] - 2026-05-12 18:40
 
 ### Changed
