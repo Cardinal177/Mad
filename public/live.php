@@ -1128,6 +1128,16 @@ $buildPageUrl = static function (string $page) use ($navParams): string {
         .recipe-ingredient-row:last-child {
             border-bottom: 0;
         }
+        .recipe-ingredient-row.section-header {
+            background: rgba(20,35,29,0.06);
+        }
+        .recipe-ingredient-row.section-header .recipe-ingredient-name {
+            font-weight: 800;
+            letter-spacing: 0.02em;
+        }
+        .recipe-ingredient-row.section-header .recipe-ingredient-qty {
+            display: none;
+        }
         .recipe-ingredient-name {
             font-weight: 600;
         }
@@ -6106,8 +6116,28 @@ function openRecipeModal(recipe) {
     if (ingTitleEl) {
         ingTitleEl.textContent = `Ingredienser (${ings.length})`;
     }
+
+    const isIngredientHeader = (item) => {
+        const name = String(item?.name || item || '').trim();
+        const quantity = item?.quantity ?? '';
+        const unit = item?.unit ?? '';
+        if (!name) {
+            return false;
+        }
+        if (String(quantity).trim() !== '' || String(unit).trim() !== '') {
+            return false;
+        }
+        if (/\d/.test(name)) {
+            return false;
+        }
+        return /^(til\b|[A-ZÆØÅ][A-Za-zÆØÅæøå\-\s]{2,60})$/.test(name);
+    };
+
     ingEl.innerHTML = ings.length
-        ? ings.map(i => `<div class="recipe-ingredient-row"><span class="recipe-ingredient-name">${esc(i.name || i)}</span><span class="recipe-ingredient-qty">${esc(i.quantity || '')}</span></div>`).join('')
+        ? ings.map(i => {
+            const rowClass = isIngredientHeader(i) ? 'recipe-ingredient-row section-header' : 'recipe-ingredient-row';
+            return `<div class="${rowClass}"><span class="recipe-ingredient-name">${esc(i.name || i)}</span><span class="recipe-ingredient-qty">${esc(i.quantity || '')}</span></div>`;
+        }).join('')
         : '<div class="recipe-ingredient-row" style="color:var(--muted);">Ingen ingredienser registreret</div>';
 
     // Steps
