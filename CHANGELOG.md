@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.47] - 2026-05-12 18:58
+
+### Changed
+- Render ingredient section headers in bold in recipe modal
+
+
 ## [0.2.46] - 2026-05-12 18:56
 
 ### Changed
